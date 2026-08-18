@@ -1,48 +1,58 @@
 const mongoose = require("mongoose");
 
-const userSchema = new mongoose.Schema({
-  phoneNumber: {
-    type: String,
-    required: true,
-    unique: true,
-    sparse: true,
-  },
-  phoneSuffix: {
-    type: String,
-    required: true,
-    unique: false,
-  },
-  username: {
-    type: String,
-    required: true,
-    unique: true,
-  },
-  email: {
-    type: String,
-    required: true,
-    lowercase: true,
-    validate: {
-      validator: function (v) {
-        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-      },
-      message: (props) => `${props.value} is not a valid email address!`,
+const userSchema = new mongoose.Schema(
+  {
+    phoneNumber: {
+      type: String,
+      unique: true,
+      sparse: true,
     },
-  },
-  emailOtp: {
-    type: String,
-    required: false,
-  },
-  emailOtpExpiry: {
-    type: Date,
-    required: false,
-  },
-  profilePicture: {
-    type: String,
-    required: false,
-  },
-  about: {
-    type: String,
-    required: false,
+    phoneSuffix: {
+      type: String,
+      required: false,
+    },
+    username: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+    email: {
+      type: String,
+      unique: true,
+      sparse: true,
+      lowercase: true,
+      validate: {
+        validator: function (v) {
+          if (!v) return true;
+          return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+        },
+        message: (props) => `${props.value} is not a valid email address!`,
+      },
+    },
+    emailOtp: {
+      type: String,
+      required: false,
+    },
+    emailOtpExpiry: {
+      type: Date,
+      required: false,
+    },
+    phoneOtp: {
+      type: String,
+      required: false,
+    },
+    phoneOtpExpiry: {
+      type: Date,
+      required: false,
+    },
+    profilePicture: {
+      type: String,
+      required: false,
+    },
+    about: {
+      type: String,
+      required: false,
+      default: "Hey there! I am using WhatsApp.",
     },
     lastSeen: {
       type: Date,
@@ -51,6 +61,7 @@ const userSchema = new mongoose.Schema({
     isOnline: {
       type: Boolean,
       required: false,
+      default: false,
     },
     isVerified: {
       type: Boolean,
@@ -59,7 +70,8 @@ const userSchema = new mongoose.Schema({
     },
     agree: {
       type: Boolean,
-      required: true,
+      required: false,
+      default: false,
     },
   },
   { timestamps: true }
