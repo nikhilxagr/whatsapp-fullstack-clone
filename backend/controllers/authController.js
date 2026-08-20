@@ -126,7 +126,33 @@ const verifyOtp = async (req, res) => {
   }
 };
 
+const updateProfile = async (req, res) => {
+  const { username , agreed, about } = req.body;
+  const userId= req.user.userId;
+
+  try {
+    const user = await User.findById(userId);
+    const file = req.file;
+    if(file){
+      const uploadResult = await uploadOnCloudinary(file);
+      console.log("Upload Result:", uploadResult);
+      user.profilePicture = uploadResult?.secure_url;
+    }
+
+    if(username) user.username = username;
+    if(agreed) user.agreed = agreed;
+    if(about) user.about = about;
+    await user.save();
+  } catch (error) {
+    console.error("Error occurred while updating profile:", error);
+    return response(res, 500, "Internal server error", {
+      error: error.message,
+    });
+  }
+}
+
 module.exports = {
   sendOtp,
   verifyOtp,
-};
+  updateProfile
+};
