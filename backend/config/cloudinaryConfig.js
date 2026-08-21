@@ -1,9 +1,7 @@
 const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
-const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const dotenv = require("dotenv");
 dotenv.config();
-const fs = require("fs");
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -12,20 +10,23 @@ cloudinary.config({
 });
 
 const uploadOnCloudinary = async (file) => {
-    const options = {
-        resource_type: file.minetype.startWith("image") ? "image" : "video",
-    }
+  if (!file) return null;
+  const isImage = file.mimetype?.startsWith("image");
+  const options = {
+    resource_type: isImage ? "image" : "video",
+  };
 
-    return new Promise((resolve, reject) => {
-        const uploader = file.minetype.startWith("image") ? cloudinary.uploader.upload : cloudinary.uploader.upload_large;
-        uploader(file.path, options, (error, result) => {
-            if (error) return reject(error);
-            resolve(result);
-        });
+  return new Promise((resolve, reject) => {
+    const uploader = isImage
+      ? cloudinary.uploader.upload
+      : cloudinary.uploader.upload_large;
+    uploader(file.path, options, (error, result) => {
+      if (error) return reject(error);
+      resolve(result);
     });
-}
+  });
+};
 
+const multerMiddleware = multer({ dest: "uploads/" }).single("file");
 
-const multerMiddleware = multer({dist:"uploads/"}).single("file");
-
-module.exports = { uploadOnCloudinary, cloudinary, multerMiddleware };
+module.exports = { uploadOnCloudinary, cloudinary, multerMiddleware };
