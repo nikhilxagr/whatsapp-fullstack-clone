@@ -5,6 +5,7 @@ const dotenv = require("dotenv");
 const connectDB = require("./config/dbConnect");
 const authRoute = require("./routes/authRoute");
 const chatRoute = require("./routes/chatRoute");
+const statusRoute = require("./routes/statusRoute");
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ connectDB();
 // API Routes
 app.use("/api/auth", authRoute);
 app.use("/api/chat", chatRoute);
+app.use("/api/status", statusRoute);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

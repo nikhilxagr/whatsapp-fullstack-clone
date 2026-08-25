@@ -1,228 +1,157 @@
 const Status = require("../models/Status");
-const Message = require("../models/Message");
-const { uploadFileToCloudinary } = require("../utils/cloudinary");
 const response = require("../utils/responseHandler");
+
+const getUserId = (req) => {
+  return req.user?.userId || req.user?._id || req.user?.id;
+};
 
 exports.createStatus = async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return response(res, 401, "Unauthorized: User ID missing");
+    }
+
     const { content, contentType } = req.body;
-    const userId = req.user.userId;
     const file = req.file;
 
-    // check if a status already exists for the user
-    let status = await Status.findOne({ user: req.user.userId });
-
-    if (status) {
-      // update the existing status
-      status.content = content;
-      status.contentType = contentType;
-      if (file) {
-        const uploadFile = await uploadFileToCloudinary(file);
-        if (uploadFile?.secure_url) {
-          status.imageOrVideoUrl = uploadFile.secure_url;
-        }
-      }
-      await status.save();
-    } else {
-      // create a new status
-      status = new Status({
-        user: req.user.userId,
-        content: content,
-        messageType: messageType,
-        imageOrVideoUrl: file ? (await uploadFileToCloudinary(file))?.secure_url : null,
-      });
-      await status.save();
-    }
-
-    res.status(201).json({ message: "Status created/updated successfully", data: status });
-  } catch (error) {
-    console.error("Error creating/updating status:", error);
-    res.status(500).json({ error: "Failed to create/update status" });
-  }
-};
-
-    let conversation = await Conversation.findOne({
-      participants: [senderId, receiverId],
-    });
-
-    if (!conversation) {
-      // create a new conversation if it doesn't exist
-      conversation = new Conversation({
-        participants: [senderId, receiverId],
-        lastMessage: null,
-        unreadCount: 0,
-      });
-      await conversation.save();
-    }
-
-    let imageOrVideoUrl = null;
-    let contentType = null;
+    let finalContent = content;
+    let finalContentType = contentType || "text";
 
     if (file) {
-      const uploadFile = await uploadFileToCloudinary(file);
-      if (uploadFile?.secure_url) {
-        return res.status(400).json({ error: "File upload failed" });
+      finalContent = file.path || file.secure_url || file.filename || content;
+      if (file.mimetype) {
+        if (file.mimetype.startsWith("image/")) {
+          finalContentType = "image";
+        } else if (file.mimetype.startsWith("video/")) {
+          finalContentType = "video";
+        }
       }
-      imageOrVideoUrl = uploadFile?.secure_url;
-
-      if (file.mimetype.startsWith("image/")) {
-        contentType = "image";
-      } else if (file.mimetype.startsWith("video/")) {
-        contentType = "video";
-      } else {
-        return res
-          .status(400)
-          .json({
-            error: "Invalid file type. Only images and videos are allowed.",
-          });
-      }
-    } else if (!content?.trim()) {
-      contentType = "text";
-    } else {
-      return res.status(400).json({ error: "Message content is required" });
     }
 
-    const message = new Message({
-      conversation: conversation._id,
-      sender: senderId,
-      receiver: receiverId,
-      content: content || null,
-      contentType: contentType,
-      imageOrVideoUrl: imageOrVideoUrl || null,
-      messageStatus: messageStatus || "sent",
+    if (!finalContent || !finalContent.trim()) {
+      return response(res, 400, "Status content is required");
+    }
+
+    const newStatus = new Status({
+      user: userId,
+      content: finalContent,
+      contentType: finalContentType,
+      viewers: [],
     });
-    await message.save();
 
-    if (message?.content) {
-      conversation.lastMessage = message?.id;
-    }
-    conversation.unreadCount += 1;
-    await conversation.save();
+    await newStatus.save();
 
-    const populatedMessage = await Message.findById(message._id)
-      .populate("sender", "username profilePicture")
-      .populate("receiver", "username profilePicture");
-    res
-      .status(201)
-      .json({ message: "Message sent successfully", data: populatedMessage });
+    const populatedStatus = await Status.findById(newStatus._id).populate(
+      "user",
+      "username profilePicture phoneNumber"
+    );
+
+    return response(res, 201, "Status created successfully", populatedStatus);
   } catch (error) {
-    console.error("Error sending message:", error);
-    res.status(500).json({ error: "Failed to send message" });
+    console.error("Error in createStatus:", error);
+    return response(res, 500, "Failed to create status", error.message);
   }
 };
 
-// get all conversations
-
-exports.getConversations = async (req, res) => {
-  const userId = req.user.userId;
+exports.getStatuses = async (req, res) => {
   try {
-    let conversations = await Conversation.find({
-      participants: userId,
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const statuses = await Status.find({
+      createdAt: { $gte: twentyFourHoursAgo },
     })
-      .populate("participants", "username profilePicture isOnline lastSeen")
-      .populate({
-        path: "lastMessage",
-        populate: {
-          path: "sender receiver",
-          select: "username profilePicture",
-        },
-      })
-      .sort({ updatedAt: -1 });
-    return response.success(
-      res,
-      200,
-      "Conversations fetched successfully",
-      conversations,
-    );
+      .populate("user", "username profilePicture phoneNumber isOnline lastSeen")
+      .populate("viewers", "username profilePicture")
+      .sort({ createdAt: -1 });
+
+    const groupedMap = {};
+    statuses.forEach((status) => {
+      if (!status.user) return;
+      const statusUserId = status.user._id.toString();
+
+      if (!groupedMap[statusUserId]) {
+        groupedMap[statusUserId] = {
+          user: status.user,
+          statuses: [],
+        };
+      }
+      groupedMap[statusUserId].statuses.push(status);
+    });
+
+    const result = Object.values(groupedMap);
+
+    return response(res, 200, "Statuses fetched successfully", result);
   } catch (error) {
-    console.error("Error fetching conversations:", error);
-    res.status(500).json({ error: "Failed to fetch conversations" });
+    console.error("Error in getStatuses:", error);
+    return response(res, 500, "Failed to fetch statuses", error.message);
   }
 };
 
-// get messages for a specific conversation
-
-exports.getMessages = async (req, res) => {
-  const { conversationId } = req.params;
-  const userId = req.user.userId;
+exports.getUserStatus = async (req, res) => {
   try {
-    const conversation = await Conversation.findById(conversationId);
-    if (!conversation) {
-      return res.status(404).json({ error: "Conversation not found" });
-    }
-    if (!conversation.participants.includes(userId)) {
-      return res
-        .status(403)
-        .json({ error: "You are not a participant in this conversation" });
-    }
-    const messages = await Message.find({ conversation: conversationId })
-      .populate("sender", "username profilePicture")
-      .populate("receiver", "username profilePicture")
-      .sort({ createdAt: 1 });
+    const userId = getUserId(req);
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    await Message.updateMany(
-      { conversation: conversationId, receiver: userId, messageStatus: "sent" },
-      { $set: { messageStatus: "read" } },
-    );
+    const myStatuses = await Status.find({
+      user: userId,
+      createdAt: { $gte: twentyFourHoursAgo },
+    })
+      .populate("viewers", "username profilePicture phoneNumber")
+      .sort({ createdAt: -1 });
 
-    conversation.unreadCount = 0;
-    await conversation.save();
-    return response.success(
-      res,
-      200,
-      "Messages fetched successfully",
-      messages,
-    );
+    return response(res, 200, "My statuses fetched successfully", myStatuses);
   } catch (error) {
-    console.error("Error fetching messages:", error);
-    res.status(500).json({ error: "Failed to fetch messages" });
+    console.error("Error in getUserStatus:", error);
+    return response(res, 500, "Failed to fetch user status", error.message);
   }
 };
 
-exports.markAsRead = async (req, res) => {
-  const { messageId } = req.body;
-  const userId = req.user.userId;
+exports.viewStatus = async (req, res) => {
   try {
-    const message = await Message.findById(messageId);
-    if (!message) {
-      return res.status(404).json({ error: "Message not found" });
+    const { statusId } = req.params;
+    const userId = getUserId(req);
+
+    const status = await Status.findById(statusId);
+    if (!status) {
+      return response(res, 404, "Status not found");
     }
-    if (message.receiver.toString() !== userId) {
-      return res
-        .status(403)
-        .json({ error: "You are not the receiver of this message" });
+
+    if (!status.viewers.includes(userId)) {
+      status.viewers.push(userId);
+      await status.save();
     }
-    message.messageStatus = "read";
-    await message.save();
-    return response.success(
-      res,
-      200,
-      "Message marked as read successfully",
-      message,
-    );
+
+    const updatedStatus = await Status.findById(statusId)
+      .populate("user", "username profilePicture")
+      .populate("viewers", "username profilePicture");
+
+    return response(res, 200, "Status marked as viewed", updatedStatus);
   } catch (error) {
-    console.error("Error marking message as read:", error);
-    res.status(500).json({ error: "Failed to mark message as read" });
+    console.error("Error in viewStatus:", error);
+    return response(res, 500, "Failed to mark status as viewed", error.message);
   }
 };
 
-exports.deleteMessage = async (req, res) => {
-  const { messageId } = req.params;
-  const userId = req.user.userId;
+exports.deleteStatus = async (req, res) => {
   try {
-    const message = await Message.findById(messageId);
-    if (!message) {
-      return res.status(404).json({ error: "Message not found" });
+    const { statusId } = req.params;
+    const userId = getUserId(req);
+
+    const status = await Status.findById(statusId);
+    if (!status) {
+      return response(res, 404, "Status not found");
     }
-    if (message.sender.toString() !== userId) {
-      return res
-        .status(403)
-        .json({ error: "You are not the sender of this message" });
+
+    if (status.user.toString() !== userId.toString()) {
+      return response(res, 403, "Unauthorized: You can only delete your own status");
     }
-    await message.deleteOne();
-    return response.success(res, 200, "Message deleted successfully", message);
+
+    await status.deleteOne();
+
+    return response(res, 200, "Status deleted successfully", { statusId });
   } catch (error) {
-    console.error("Error deleting message:", error);
-    res.status(500).json({ error: "Failed to delete message" });
+    console.error("Error in deleteStatus:", error);
+    return response(res, 500, "Failed to delete status", error.message);
   }
 };
