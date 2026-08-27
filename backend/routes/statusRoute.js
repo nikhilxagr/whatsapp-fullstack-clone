@@ -1,17 +1,17 @@
-const express = require("express");
+const express = require('express');
+const statusController = require('../controllers/statusController');
+const authMiddleware =  require('../middleware/authMiddleware');
+const { multerMiddleware } = require('../config/cloudinaryConfig');
+
+
 const router = express.Router();
-const statusController = require("../controllers/statusController");
-const authMiddleware = require("../middleware/authMiddleware");
 
-router.use(authMiddleware);
+//protected route
 
-router
-  .route("/")
-  .post(statusController.createStatus)
-  .get(statusController.getStatuses);
+router.post('/',authMiddleware, multerMiddleware, statusController.createStatus);
+router.get('/',authMiddleware, statusController.getStatuses)
+router.put('/:statusId/view', authMiddleware, statusController.viewStatus)
 
-router.get("/me", statusController.getUserStatus);
-router.patch("/:statusId/view", statusController.viewStatus);
-router.delete("/:statusId", statusController.deleteStatus);
+router.delete("/:statusId", authMiddleware, statusController.deleteStatus);
 
 module.exports = router;

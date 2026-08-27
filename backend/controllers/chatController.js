@@ -1,24 +1,27 @@
-const Conversation = require('../models/Conversation');
-const Message = require('../models/Message');
-const { uploadFileToCloudinary } = require('../utils/cloudinary');
-const response = require('../utils/responseHandler');
+const Conversation = require("../models/Conversation");
+const Message = require("../models/Message");
+const { uploadOnCloudinary } = require("../config/cloudinaryConfig");
+const response = require("../utils/responseHandler");
 
-
+// 1. Send Message (REST API + Real-time Socket.io broadcast)
 exports.sendMessage = async (req, res) => {
   try {
     const { senderId, receiverId, content, messageStatus } = req.body;
+    const effectiveSenderId = senderId || req.user?._id;
     const file = req.file;
 
-    const participant = { senderId, receiverId }.sort().join('-');
+    if (!effectiveSenderId || !receiverId) {
+      return response(res, 400, "Sender and receiver IDs are required");
+    }
 
-
-    // check if a conversation already exists between the participants
-    let conversation = await Conversation.findOne({ participants: [senderId, receiverId] });
+    // Check if a conversation already exists between the participants
+    let conversation = await Conversation.findOne({
+      participants: { $all: [effectiveSenderId, receiverId] },
+    });
 
     if (!conversation) {
-      // create a new conversation if it doesn't exist
       conversation = new Conversation({
-        participants: [senderId, receiverId],
+        participants: [effectiveSenderId, receiverId],
         lastMessage: null,
         unreadCount: 0,
       });
@@ -26,148 +29,222 @@ exports.sendMessage = async (req, res) => {
     }
 
     let imageOrVideoUrl = null;
-    let contentType = null;
+    let contentType = "text";
 
     if (file) {
-      const uploadFile= await uploadFileToCloudinary(file);
-      if (uploadFile?.secure_url) {
-        return res.status(400).json({ error: 'File upload failed' });
+      const uploadResult = await uploadOnCloudinary(file);
+      if (!uploadResult?.secure_url) {
+        return response(res, 400, "File upload failed");
       }
-      imageOrVideoUrl = uploadFile?.secure_url;
+      imageOrVideoUrl = uploadResult.secure_url;
 
-      if (file.mimetype.startsWith('image/')) {
-        contentType = 'image';
-      } else if (file.mimetype.startsWith('video/')) {
-        contentType = 'video';
-      } 
-      else {
-        return res.status(400).json({ error: 'Invalid file type. Only images and videos are allowed.' });
+      if (file.mimetype?.startsWith("image/")) {
+        contentType = "image";
+      } else if (file.mimetype?.startsWith("video/")) {
+        contentType = "video";
+      } else {
+        return response(res, 400, "Invalid file type. Only images and videos are allowed.");
       }
-    }
-      else if (!content?.trim()) {
-        contentType = 'text';
-      } else { return res.status(400).json({ error: 'Message content is required' });
+    } else if (!content?.trim()) {
+      return response(res, 400, "Message content or file is required");
     }
 
     const message = new Message({
-      conversation:conversation._id,
-      sender:senderId,
-      receiver:receiverId,
-      content:content || null,
-      contentType:contentType,
-      imageOrVideoUrl:imageOrVideoUrl || null,
-      messageStatus:messageStatus || 'sent',
+      conversation: conversation._id,
+      sender: effectiveSenderId,
+      receiver: receiverId,
+      content: content || null,
+      contentType: contentType,
+      imageOrVideoUrl: imageOrVideoUrl,
+      messageStatus: messageStatus || "sent",
     });
     await message.save();
 
-    if(message?.content){
-      conversation.lastMessage = message?.id;
-    }
+    conversation.lastMessage = message._id;
     conversation.unreadCount += 1;
     await conversation.save();
 
     const populatedMessage = await Message.findById(message._id)
-      .populate('sender', 'username profilePicture')
-      .populate('receiver', 'username profilePicture');
-    res.status(201).json({ message: 'Message sent successfully', data: populatedMessage });
+      .populate("sender", "username profilePicture")
+      .populate("receiver", "username profilePicture");
 
-  } catch (error) {
-    console.error('Error sending message:', error);
-    res.status(500).json({ error: 'Failed to send message' });
-  }
-} 
-
-// get all conversations
-
-exports.getConversations = async (req, res) => {
-  const userId = req.user.userId;
-  try {
-    let conversations = await Conversation.find({
-       participants: userId
-    }).populate('participants', 'username profilePicture isOnline lastSeen')
-    .populate({
-      path: 'lastMessage',
-      populate: {
-        path: 'sender receiver',
-        select: 'username profilePicture'
+    // Broadcast in real-time via Socket.io if available
+    if (req.io && req.socketUserMap) {
+      const receiverSocketId = req.socketUserMap.get(receiverId?.toString());
+      if (receiverSocketId) {
+        req.io.to(receiverSocketId).emit("receiveMessage", populatedMessage);
       }
-    })
-    .sort({ updatedAt: -1 });
-    return response.success(res, 200, 'Conversations fetched successfully', conversations);
+    }
+
+    return response(res, 201, "Message sent successfully", populatedMessage);
   } catch (error) {
-    console.error('Error fetching conversations:', error);
-    res.status(500).json({ error: 'Failed to fetch conversations' });
+    console.error("Error sending message:", error);
+    return response(res, 500, "Failed to send message", { error: error.message });
   }
-}
+};
 
-// get messages for a specific conversation
+// 2. Get all conversations for logged-in user
+exports.getConversations = async (req, res) => {
+  const userId = req.user?._id || req.user?.userId;
+  try {
+    const conversations = await Conversation.find({
+      participants: userId,
+    })
+      .populate("participants", "username profilePicture isOnline lastSeen")
+      .populate({
+        path: "lastMessage",
+        populate: {
+          path: "sender receiver",
+          select: "username profilePicture",
+        },
+      })
+      .sort({ updatedAt: -1 });
 
+    return response(res, 200, "Conversations fetched successfully", conversations);
+  } catch (error) {
+    console.error("Error fetching conversations:", error);
+    return response(res, 500, "Failed to fetch conversations", { error: error.message });
+  }
+};
+
+// 3. Get messages for a specific conversation
 exports.getMessages = async (req, res) => {
   const { conversationId } = req.params;
-  const userId = req.user.userId;
+  const userId = req.user?._id || req.user?.userId;
   try {
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
-      return res.status(404).json({ error: 'Conversation not found' });
-    };
-    if (!conversation.participants.includes(userId)) {
-      return res.status(403).json({ error: 'You are not a participant in this conversation' });
+      return response(res, 404, "Conversation not found");
     }
+    if (!conversation.participants.map((p) => p.toString()).includes(userId.toString())) {
+      return response(res, 403, "You are not a participant in this conversation");
+    }
+
     const messages = await Message.find({ conversation: conversationId })
-      .populate('sender', 'username profilePicture')
-      .populate('receiver', 'username profilePicture')
+      .populate("sender", "username profilePicture")
+      .populate("receiver", "username profilePicture")
+      .populate("reactions.user", "username profilePicture")
       .sort({ createdAt: 1 });
 
-      await Message.updateMany(
-        { conversation: conversationId, receiver: userId, messageStatus: 'sent' },
-        { $set: { messageStatus: 'read' } }
-      );
+    await Message.updateMany(
+      { conversation: conversationId, receiver: userId, messageStatus: "sent" },
+      { $set: { messageStatus: "read" } }
+    );
 
-      conversation.unreadCount = 0;
-      await conversation.save();
-    return response.success(res, 200, 'Messages fetched successfully', messages);
+    conversation.unreadCount = 0;
+    await conversation.save();
 
+    return response(res, 200, "Messages fetched successfully", messages);
   } catch (error) {
-    console.error('Error fetching messages:', error);
-    res.status(500).json({ error: 'Failed to fetch messages' });
+    console.error("Error fetching messages:", error);
+    return response(res, 500, "Failed to fetch messages", { error: error.message });
   }
-}
+};
 
+// 4. Mark message as read
 exports.markAsRead = async (req, res) => {
   const { messageId } = req.body;
-  const userId = req.user.userId;
+  const userId = req.user?._id || req.user?.userId;
   try {
     const message = await Message.findById(messageId);
     if (!message) {
-      return res.status(404).json({ error: 'Message not found' });
+      return response(res, 404, "Message not found");
     }
-    if (message.receiver.toString() !== userId) {
-      return res.status(403).json({ error: 'You are not the receiver of this message' });
+    if (message.receiver.toString() !== userId.toString()) {
+      return response(res, 403, "You are not the receiver of this message");
     }
-    message.messageStatus = 'read';
-    await message.save();
-    return response.success(res, 200, 'Message marked as read successfully', message);
-  } catch (error) {
-    console.error('Error marking message as read:', error);
-    res.status(500).json({ error: 'Failed to mark message as read' });
-  }
-}
 
+    message.messageStatus = "read";
+    await message.save();
+
+    return response(res, 200, "Message marked as read successfully", message);
+  } catch (error) {
+    console.error("Error marking message as read:", error);
+    return response(res, 500, "Failed to mark message as read", { error: error.message });
+  }
+};
+
+// 5. Delete message
 exports.deleteMessage = async (req, res) => {
   const { messageId } = req.params;
-  const userId = req.user.userId;
+  const userId = req.user?._id || req.user?.userId;
   try {
     const message = await Message.findById(messageId);
     if (!message) {
-      return res.status(404).json({ error: 'Message not found' });
+      return response(res, 404, "Message not found");
     }
-    if (message.sender.toString() !== userId) {
-      return res.status(403).json({ error: 'You are not the sender of this message' });
+    if (message.sender.toString() !== userId.toString()) {
+      return response(res, 403, "You are not the sender of this message");
     }
+
     await message.deleteOne();
-    return response.success(res, 200, 'Message deleted successfully', message);
+    return response(res, 200, "Message deleted successfully", message);
   } catch (error) {
-    console.error('Error deleting message:', error);
-    res.status(500).json({ error: 'Failed to delete message' });
+    console.error("Error deleting message:", error);
+    return response(res, 500, "Failed to delete message", { error: error.message });
   }
-}
+};
+
+// 6. Update message
+exports.updateMessage = async (req, res) => {
+  const { messageId } = req.params;
+  const { content } = req.body;
+  const userId = req.user?._id || req.user?.userId;
+  const file = req.file;
+
+  try {
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return response(res, 404, "Message not found");
+    }
+    if (message.sender.toString() !== userId.toString()) {
+      return response(res, 403, "You can only edit your own messages");
+    }
+
+    if (file) {
+      const uploadResult = await uploadOnCloudinary(file);
+      if (uploadResult?.secure_url) {
+        message.imageOrVideoUrl = uploadResult.secure_url;
+      }
+    }
+
+    if (content !== undefined) {
+      message.content = content;
+    }
+
+    await message.save();
+
+    const updatedMessage = await Message.findById(message._id)
+      .populate("sender", "username profilePicture")
+      .populate("receiver", "username profilePicture");
+
+    return response(res, 200, "Message updated successfully", updatedMessage);
+  } catch (error) {
+    console.error("Error updating message:", error);
+    return response(res, 500, "Failed to update message", { error: error.message });
+  }
+};
+
+// 7. Delete conversation
+exports.deleteConversation = async (req, res) => {
+  const { conversationId } = req.params;
+  const userId = req.user?._id || req.user?.userId;
+
+  try {
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return response(res, 404, "Conversation not found");
+    }
+    if (!conversation.participants.map((p) => p.toString()).includes(userId.toString())) {
+      return response(res, 403, "You are not a participant in this conversation");
+    }
+
+    await Message.deleteMany({ conversation: conversationId });
+    await conversation.deleteOne();
+
+    return response(res, 200, "Conversation deleted successfully");
+  } catch (error) {
+    console.error("Error deleting conversation:", error);
+    return response(res, 500, "Failed to delete conversation", { error: error.message });
+  }
+};
