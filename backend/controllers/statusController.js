@@ -1,4 +1,5 @@
 const Status = require("../models/Status");
+const { uploadOnCloudinary } = require("../config/cloudinaryConfig");
 const response = require("../utils/responseHandler");
 
 const getUserId = (req) => {
@@ -19,7 +20,10 @@ exports.createStatus = async (req, res) => {
     let finalContentType = contentType || "text";
 
     if (file) {
-      finalContent = file.path || file.secure_url || file.filename || content;
+      const uploadResult = await uploadOnCloudinary(file);
+      if (uploadResult?.secure_url) {
+        finalContent = uploadResult.secure_url;
+      }
       if (file.mimetype) {
         if (file.mimetype.startsWith("image/")) {
           finalContentType = "image";
@@ -30,7 +34,7 @@ exports.createStatus = async (req, res) => {
     }
 
     if (!finalContent || !finalContent.trim()) {
-      return response(res, 400, "Status content is required");
+      return response(res, 400, "Status content or file is required");
     }
 
     const newStatus = new Status({
@@ -50,9 +54,10 @@ exports.createStatus = async (req, res) => {
     return response(res, 201, "Status created successfully", populatedStatus);
   } catch (error) {
     console.error("Error in createStatus:", error);
-    return response(res, 500, "Failed to create status", error.message);
+    return response(res, 500, "Failed to create status", { error: error.message });
   }
 };
+
 
 exports.getStatuses = async (req, res) => {
   try {
@@ -84,7 +89,7 @@ exports.getStatuses = async (req, res) => {
     return response(res, 200, "Statuses fetched successfully", result);
   } catch (error) {
     console.error("Error in getStatuses:", error);
-    return response(res, 500, "Failed to fetch statuses", error.message);
+    return response(res, 500, "Failed to fetch statuses", { error: error.message });
   }
 };
 
@@ -103,7 +108,7 @@ exports.getUserStatus = async (req, res) => {
     return response(res, 200, "My statuses fetched successfully", myStatuses);
   } catch (error) {
     console.error("Error in getUserStatus:", error);
-    return response(res, 500, "Failed to fetch user status", error.message);
+    return response(res, 500, "Failed to fetch user status", { error: error.message });
   }
 };
 
@@ -129,7 +134,7 @@ exports.viewStatus = async (req, res) => {
     return response(res, 200, "Status marked as viewed", updatedStatus);
   } catch (error) {
     console.error("Error in viewStatus:", error);
-    return response(res, 500, "Failed to mark status as viewed", error.message);
+    return response(res, 500, "Failed to mark status as viewed", { error: error.message });
   }
 };
 
@@ -152,6 +157,7 @@ exports.deleteStatus = async (req, res) => {
     return response(res, 200, "Status deleted successfully", { statusId });
   } catch (error) {
     console.error("Error in deleteStatus:", error);
-    return response(res, 500, "Failed to delete status", error.message);
+    return response(res, 500, "Failed to delete status", { error: error.message });
   }
 };
+
