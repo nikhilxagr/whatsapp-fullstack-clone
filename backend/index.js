@@ -1,7 +1,9 @@
+const dotenv = require("dotenv");
+dotenv.config();
+
 const express = require("express");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
-const dotenv = require("dotenv");
 const http = require("http");
 
 const connectDB = require("./config/dbConnect");
@@ -9,8 +11,7 @@ const authRoute = require("./routes/authRoute");
 const chatRoute = require("./routes/chatRoute");
 const statusRoute = require("./routes/statusRoute");
 const { initializeSocket } = require("./services/socketService");
-
-dotenv.config();
+require("./services/firebaseService");
 
 const PORT = process.env.PORT || 5000;
 const app = express();
@@ -49,4 +50,3 @@ app.use("/api/status", statusRoute);
 server.listen(PORT, () => {
   console.log(`Server and Socket.io are running on port ${PORT}`);
 });
-
