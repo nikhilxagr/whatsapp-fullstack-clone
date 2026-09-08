@@ -229,13 +229,64 @@ const getAllUsers = async (req, res) => {
 };
 
 
+// Step - 7: Verify Firebase Phone Token & Log In / Sign Up
+const verifyFirebasePhone = async (req, res) => {
+  const { idToken, phoneSuffix } = req.body;
+
+  if (!idToken) {
+    return response(res, 400, "Firebase ID Token is required");
+  }
+
+  try {
+    const { verifyFirebaseToken } = require("../services/firebaseService");
+    const decoded = await verifyFirebaseToken(idToken);
+    const fullPhoneNumber = decoded.phone_number;
+
+    if (!fullPhoneNumber) {
+      return response(res, 400, "No phone number associated with this Firebase token");
+    }
+
+    let user = await User.findOne({ phoneNumber: fullPhoneNumber });
+    if (!user) {
+      user = new User({
+        phoneNumber: fullPhoneNumber,
+        phoneSuffix: phoneSuffix || fullPhoneNumber.slice(0, 3),
+        isVerified: true,
+      });
+      await user.save();
+    } else {
+      user.isVerified = true;
+      await user.save();
+    }
+
+    const token = generateToken(user._id);
+    res.cookie("auth_token", token, {
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24 * 365, // 1 year
+      sameSite: "lax",
+    });
+
+    return response(res, 200, "Phone verified successfully via Firebase", {
+      token,
+      user,
+    });
+  } catch (error) {
+    console.error("Error verifying Firebase phone token:", error);
+    return response(res, 401, error.message || "Failed to verify phone token", {
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   sendOtp,
   verifyOtp,
+  verifyFirebasePhone,
   updateProfile,
   logout,
   checkAuthenticated,
   getAllUsers,
 };
+
 
 
