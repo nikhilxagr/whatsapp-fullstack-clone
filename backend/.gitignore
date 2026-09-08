@@ -5,6 +5,13 @@
 /.pnp
 .pnp.js
 .env
+.env.*
+*.env
+
+# Secrets & Credentials
+*service-account*.json
+firebase-service-account*.json
+/uploads/
 
 # testing
 /coverage
