@@ -68,11 +68,13 @@ exports.sendMessage = async (req, res) => {
       .populate("sender", "username profilePicture")
       .populate("receiver", "username profilePicture");
 
-    // Broadcast in real-time via Socket.io if available
+    // Emit socket event in real-time (and set delivered if receiver is online)
     if (req.io && req.socketUserMap) {
       const receiverSocketId = req.socketUserMap.get(receiverId?.toString());
       if (receiverSocketId) {
         req.io.to(receiverSocketId).emit("receiveMessage", populatedMessage);
+        message.messageStatus = "delivered";
+        await message.save();
       }
     }
 
@@ -127,7 +129,7 @@ exports.getMessages = async (req, res) => {
       .sort({ createdAt: 1 });
 
     await Message.updateMany(
-      { conversation: conversationId, receiver: userId, messageStatus: "sent" },
+      { conversation: conversationId, receiver: userId, messageStatus: { $ne: "read" } },
       { $set: { messageStatus: "read" } }
     );
 
@@ -156,6 +158,18 @@ exports.markAsRead = async (req, res) => {
 
     message.messageStatus = "read";
     await message.save();
+
+    // Notify the original sender in real-time
+    if (req.io && req.socketUserMap) {
+      const senderSocketId = req.socketUserMap.get(message.sender.toString());
+      if (senderSocketId) {
+        req.io.to(senderSocketId).emit("messageRead", {
+          _id: message._id,
+          conversationId: message.conversation,
+          messageStatus: "read",
+        });
+      }
+    }
 
     return response(res, 200, "Message marked as read successfully", message);
   } catch (error) {
@@ -241,10 +255,19 @@ exports.deleteConversation = async (req, res) => {
 
     await Message.deleteMany({ conversation: conversationId });
     await conversation.deleteOne();
+    
+    // emit socket event
+    if (req.io && req.socketUserMap) {
+      // Broadcast the conversation deletion to all connected clients except the one who deleted it
+      const receiverSocketId = req.socketUserMap.get(conversation.participants.find(p => p.toString() !== userId.toString())?.toString());
+      if (receiverSocketId) {
+        req.io.to(receiverSocketId).emit("conversationDeleted", { conversationId });
+      }
+    }
 
     return response(res, 200, "Conversation deleted successfully");
   } catch (error) {
     console.error("Error deleting conversation:", error);
     return response(res, 500, "Failed to delete conversation", { error: error.message });
   }
-};
+};
