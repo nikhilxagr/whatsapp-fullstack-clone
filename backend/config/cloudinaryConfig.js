@@ -3,6 +3,8 @@ const cloudinary = require("cloudinary").v2;
 const dotenv = require("dotenv");
 dotenv.config();
 
+const fs = require("fs");
+
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -21,6 +23,9 @@ const uploadOnCloudinary = async (file) => {
       ? cloudinary.uploader.upload
       : cloudinary.uploader.upload_large;
     uploader(file.path, options, (error, result) => {
+      if (fs.existsSync(file.path)) {
+        fs.unlink(file.path, () => {});
+      }
       if (error) return reject(error);
       resolve(result);
     });
