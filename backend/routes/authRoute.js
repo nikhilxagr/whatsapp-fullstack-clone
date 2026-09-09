@@ -8,6 +8,7 @@ const router = express.Router();
 // Public auth routes
 router.post("/send-otp", authController.sendOtp);
 router.post("/verify-otp", authController.verifyOtp);
+router.post("/verify-firebase-phone", authController.verifyFirebasePhone);
 router.post("/logout", authController.logout);
 
 // Protected auth routes
