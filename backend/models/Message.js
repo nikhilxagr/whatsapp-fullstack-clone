@@ -30,7 +30,7 @@ const messageSchema = new mongoose.Schema(
     reactions: [{
         user: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Reaction",
+        ref: "User",
         },
         emoji: {
         type: String,
@@ -38,7 +38,7 @@ const messageSchema = new mongoose.Schema(
    }],
    messageStatus: {
     type: String,
-    default: "send",
+    default: "sent",
     enum: ["sent", "delivered", "read"],
    }
   },
