@@ -46,10 +46,19 @@ exports.createStatus = async (req, res) => {
 
     await newStatus.save();
 
-    const populatedStatus = await Status.findById(newStatus._id).populate(
-      "user",
-      "username profilePicture phoneNumber"
-    );
+    const populatedStatus = await Status.findById(newStatus._id)
+      .populate("user", "username profilePicture phoneNumber")
+      .populate("viewers", "username profilePicture");
+
+    // Emit Socket Event for Real-time Updates
+    if (req.io && req.socketUserMap) {
+      // Broadcast the new status to all connected clients except the one who created it
+    for(const [connectedUserId, socketId] of req.socketUserMap) {
+      if (connectedUserId !== userId.toString()) {
+        req.io.to(socketId).emit("newStatus", populatedStatus);
+      }
+    }
+    }
 
     return response(res, 201, "Status created successfully", populatedStatus);
   } catch (error) {
@@ -122,7 +131,11 @@ exports.viewStatus = async (req, res) => {
       return response(res, 404, "Status not found");
     }
 
-    if (!status.viewers.includes(userId)) {
+    const isAlreadyViewer = status.viewers.some(
+      (v) => v.toString() === userId.toString()
+    );
+
+    if (!isAlreadyViewer) {
       status.viewers.push(userId);
       await status.save();
     }
@@ -131,7 +144,29 @@ exports.viewStatus = async (req, res) => {
       .populate("user", "username profilePicture")
       .populate("viewers", "username profilePicture");
 
-    return response(res, 200, "Status marked as viewed", updatedStatus);
+    // Emit Socket Event to status owner
+    if (req.io && req.socketUserMap) {
+      const ownerId = status.user?.toString();
+      const statusOwnerSocketId = req.socketUserMap.get(ownerId);
+      if (statusOwnerSocketId && !isAlreadyViewer) {
+        const viewData = {
+          statusId: updatedStatus._id,
+          viewer: {
+            _id: userId,
+            username: req.user?.username || "Unknown",
+            profilePicture: req.user?.profilePicture || null,
+          },
+          totalViewers: updatedStatus.viewers.length,
+          viewers: updatedStatus.viewers.map((viewer) => ({
+            _id: viewer._id,
+            username: viewer.username,
+            profilePicture: viewer.profilePicture,
+          })),
+        };
+        req.io.to(statusOwnerSocketId).emit("statusViewed", viewData);
+      }
+    }
+    return response(res, 200, "Status viewed successfully", updatedStatus);
   } catch (error) {
     console.error("Error in viewStatus:", error);
     return response(res, 500, "Failed to mark status as viewed", { error: error.message });
@@ -154,10 +189,19 @@ exports.deleteStatus = async (req, res) => {
 
     await status.deleteOne();
 
+    // Emit Socket Event for Real-time Updates
+    if (req.io && req.socketUserMap) {
+      // Broadcast the status deletion to all connected clients except the one who deleted it
+      for(const [connectedUserId, socketId] of req.socketUserMap) {
+        if (connectedUserId !== userId.toString()) {
+          req.io.to(socketId).emit("statusDeleted", { statusId });
+        }
+      }
+    }
+
     return response(res, 200, "Status deleted successfully", { statusId });
   } catch (error) {
     console.error("Error in deleteStatus:", error);
     return response(res, 500, "Failed to delete status", { error: error.message });
   }
 };
-
