@@ -129,10 +129,10 @@ const verifyOtp = async (req, res) => {
 };
 
 const updateProfile = async (req, res) => {
-  const { username, agreed, about } = req.body;
-  const userId = req.user?._id;
-
   try {
+    const { username, agreed, about, profilePicture: avatarUrl } = req.body;
+    const userId = req.user?._id;
+
     const user = await User.findById(userId);
     if (!user) {
       return response(res, 404, "User not found");
@@ -144,6 +144,8 @@ const updateProfile = async (req, res) => {
       const uploadResult = await uploadOnCloudinary(file);
       console.log("Upload Result:", uploadResult);
       user.profilePicture = uploadResult?.secure_url;
+    } else if (avatarUrl) {
+      user.profilePicture = avatarUrl;
     }
 
     if (username) user.username = username;
