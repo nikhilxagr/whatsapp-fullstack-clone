@@ -10,14 +10,22 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api
 export const setupRecaptcha = (containerId = "recaptcha-container") => {
   if (typeof window === "undefined") return null;
 
-  // Clear previous verifier if any existed
+  const container = document.getElementById(containerId);
+  if (!container) {
+    console.error(`reCAPTCHA container '#${containerId}' not found in DOM`);
+    return null;
+  }
+
+  // Clear previous verifier and wipe the container element to prevent "already rendered" errors
   if (window.recaptchaVerifier) {
     try {
       window.recaptchaVerifier.clear();
     } catch (e) {
       console.warn("Could not clear previous recaptcha verifier:", e);
     }
+    window.recaptchaVerifier = null;
   }
+  container.innerHTML = "";
 
   window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
     size: "invisible",
@@ -41,17 +49,22 @@ export const setupRecaptcha = (containerId = "recaptcha-container") => {
 export const sendFirebasePhoneOtp = async (fullPhoneNumber, containerId = "recaptcha-container") => {
   try {
     const appVerifier = setupRecaptcha(containerId);
+    if (!appVerifier) {
+      throw new Error(`reCAPTCHA container '#${containerId}' not found in DOM`);
+    }
     const confirmationResult = await signInWithPhoneNumber(auth, fullPhoneNumber, appVerifier);
     return { success: true, confirmationResult };
   } catch (error) {
     console.error("Firebase send phone OTP error:", error);
-    // Reset reCAPTCHA on failure so user can try again
+    // Reset reCAPTCHA on failure so user can try again immediately
     if (window.recaptchaVerifier) {
       try {
         window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = null;
       } catch (e) {}
+      window.recaptchaVerifier = null;
     }
+    const container = document.getElementById(containerId);
+    if (container) container.innerHTML = "";
     throw error;
   }
 };

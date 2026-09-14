@@ -14,7 +14,16 @@ const PhoneLogin = ({ onLoginSuccess }) => {
     e.preventDefault();
     setErrorMsg("");
 
-    const cleanNumber = phoneNumber.trim().replace(/\D/g, "");
+    let cleanNumber = phoneNumber.trim().replace(/\D/g, "");
+    const cleanSuffix = phoneSuffix.replace(/\D/g, "");
+
+    // If user already typed the country code, strip it to prevent duplicate prefix
+    if (cleanNumber.startsWith(cleanSuffix) && cleanNumber.length > cleanSuffix.length + 6) {
+      cleanNumber = cleanNumber.slice(cleanSuffix.length);
+    }
+    // Remove leading zeros
+    cleanNumber = cleanNumber.replace(/^0+/, "");
+
     if (!cleanNumber || cleanNumber.length < 7) {
       setErrorMsg("Please enter a valid phone number");
       return;
