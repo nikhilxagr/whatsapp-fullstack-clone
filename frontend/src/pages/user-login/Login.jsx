@@ -27,7 +27,7 @@ import countries from "../../utils/countries";
 import Spinner from "../../utils/Spinner";
 import { sendOtp, verifyOtp, updateUserProfile } from "../../services/userService";
 
-// ---------------------- Validation Schemas ----------------------
+// Form validation
 const loginValidationSchema = yup
   .object()
   .shape({
@@ -62,11 +62,11 @@ const profileValidationSchema = yup.object().shape({
 
 // Default Avatars Array
 const avatars = [
-  "https://avatar.iran.liara.run/public/boy?username=1",
-  "https://avatar.iran.liara.run/public/boy?username=2",
-  "https://avatar.iran.liara.run/public/girl?username=1",
-  "https://avatar.iran.liara.run/public/girl?username=2",
-  "https://avatar.iran.liara.run/public/boy?username=3",
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Felix",
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Aneka",
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Trouble",
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Mimi",
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Jasper",
 ];
 
 const Login = () => {
@@ -138,7 +138,7 @@ const Login = () => {
     formState: { errors: profileErrors },
   } = useForm({ resolver: yupResolver(profileValidationSchema) });
 
-  // ---------------------- OTP Input Handlers ----------------------
+  // OTP handlers
   const handleOtpChange = (index, value) => {
     if (!/^\d*$/.test(value)) return;
     const digit = value.slice(-1);
@@ -187,7 +187,7 @@ const Login = () => {
     setError("");
   };
 
-  // ---------------------- API Handlers ----------------------
+  // Auth handlers
   const onLoginSubmit = async () => {
     try {
       setLoading(true);
@@ -268,7 +268,10 @@ const Login = () => {
         formData.append("profilePicture", selectedAvatar);
       }
 
-      await updateUserProfile(formData);
+      const response = await updateUserProfile(formData);
+      if (response?.data?.user) {
+        setUser(response.data.user);
+      }
       toast.success("Welcome to WhatsApp Web");
       navigate("/");
       resetLoginState();
@@ -288,7 +291,6 @@ const Login = () => {
 
   return (
     <div className="min-h-screen relative flex flex-col items-center justify-center p-4 selection:bg-[#00a884] selection:text-white bg-[#eae6df] dark:bg-[#0c1317] transition-colors duration-300">
-      {/* WhatsApp Web Brand Top Accent Banner */}
       <div className="absolute top-0 left-0 right-0 h-56 bg-gradient-to-r from-[#00a884] via-[#075e54] to-[#128c7e] dark:from-[#111b21] dark:via-[#182229] dark:to-[#111b21] dark:border-b dark:border-[#222e35] transition-colors duration-300" />
 
       {/* Top Navigation Bar: Brand & Theme Toggle */}
@@ -395,9 +397,7 @@ const Login = () => {
           )}
         </AnimatePresence>
 
-        {/* ================================================================
-            STEP 1: Phone / Email Form
-        ================================================================ */}
+        {/* Step 1: Phone / Email */}
         {step === 1 && (
           <form onSubmit={handleLoginSubmit(onLoginSubmit)} className="space-y-4">
             {/* Phone Number Field */}
@@ -540,9 +540,7 @@ const Login = () => {
           </form>
         )}
 
-        {/* ================================================================
-            STEP 2: 6-Box OTP Verification Form
-        ================================================================ */}
+        {/* Step 2: OTP verification */}
         {step === 2 && (
           <form onSubmit={handleOtpSubmit(onOtpSubmit)} className="space-y-5">
             <div>
@@ -591,9 +589,7 @@ const Login = () => {
           </form>
         )}
 
-        {/* ================================================================
-            STEP 3: Profile Setup Form
-        ================================================================ */}
+        {/* Step 3: Profile setup */}
         {step === 3 && (
           <form onSubmit={handleProfileSubmit(onProfileSubmit)} className="space-y-5">
             {/* Profile Avatar Picker */}
