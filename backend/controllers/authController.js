@@ -6,7 +6,6 @@ const { sendOtpToEmail } = require("../services/emailService");
 const response = require("../utils/responseHandler");
 const generateToken = require("../utils/generateToken");
 
-// Set JWT cookie and return the token
 const issueToken = (res, userId) => {
   const token = generateToken(userId);
   res.cookie("auth_token", token, {
@@ -17,7 +16,6 @@ const issueToken = (res, userId) => {
   return token;
 };
 
-// Step 1 of registration: save user with hashed password and send OTP to email
 const register = async (req, res) => {
   const { email, password, phoneNumber, phoneSuffix } = req.body;
 
@@ -63,7 +61,6 @@ const register = async (req, res) => {
   }
 };
 
-// Step 2 of registration: verify OTP and activate account
 const verifyEmail = async (req, res) => {
   const { email, otp } = req.body;
   if (!email || !otp) {
@@ -94,7 +91,6 @@ const verifyEmail = async (req, res) => {
   }
 };
 
-// Login with email + password
 const loginWithEmail = async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
@@ -123,7 +119,6 @@ const loginWithEmail = async (req, res) => {
   }
 };
 
-// Login with phone number + password (phone must have been added at registration)
 const loginWithPhone = async (req, res) => {
   const { phoneNumber, phoneSuffix, password } = req.body;
   if (!phoneNumber || !phoneSuffix || !password) {
@@ -153,7 +148,6 @@ const loginWithPhone = async (req, res) => {
   }
 };
 
-// Update username, avatar, or about text
 const updateProfile = async (req, res) => {
   try {
     const { username, agreed, about, profilePicture: avatarUrl } = req.body;
@@ -174,7 +168,6 @@ const updateProfile = async (req, res) => {
         console.error("Profile picture upload failed:", uploadErr.message);
       }
     } else if (avatarUrl !== undefined) {
-      // Allows updating avatar URL or passing empty string to remove avatar
       updates.profilePicture = avatarUrl || "";
     }
 
@@ -207,7 +200,6 @@ const updateProfile = async (req, res) => {
 
     if (!updatedUser) return response(res, 404, "User not found");
 
-    // Broadcast update to other users via socket
     if (req.io) {
       req.io.emit("userUpdated", {
         _id: updatedUser._id,
@@ -245,7 +237,6 @@ const checkAuthenticated = async (req, res) => {
   }
 };
 
-// Return all users except the logged-in one, with their last conversation snapshot
 const getAllUsers = async (req, res) => {
   const loggedInUser = req.user?._id || req.user?.userId;
 

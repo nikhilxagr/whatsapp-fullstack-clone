@@ -3,7 +3,6 @@ const Message = require("../models/Message");
 const { uploadOnCloudinary } = require("../config/cloudinaryConfig");
 const response = require("../utils/responseHandler");
 
-// 1. Send Message (REST API + Real-time Socket.io broadcast)
 exports.sendMessage = async (req, res) => {
   try {
     const { senderId, receiverId, content, messageStatus } = req.body;
@@ -14,7 +13,6 @@ exports.sendMessage = async (req, res) => {
       return response(res, 400, "Sender and receiver IDs are required");
     }
 
-    // Check if a conversation already exists between the participants
     let conversation = await Conversation.findOne({
       participants: { $all: [effectiveSenderId, receiverId] },
     });
@@ -68,7 +66,6 @@ exports.sendMessage = async (req, res) => {
       .populate("sender", "username profilePicture")
       .populate("receiver", "username profilePicture");
 
-    // Emit socket event in real-time (and set delivered if receiver is online)
     if (req.io && req.socketUserMap) {
       const receiverSocketId = req.socketUserMap.get(receiverId?.toString());
       if (receiverSocketId) {
@@ -85,7 +82,6 @@ exports.sendMessage = async (req, res) => {
   }
 };
 
-// 2. Get all conversations for logged-in user
 exports.getConversations = async (req, res) => {
   const userId = req.user?._id || req.user?.userId;
   try {
@@ -109,7 +105,6 @@ exports.getConversations = async (req, res) => {
   }
 };
 
-// 3. Get messages for a specific conversation
 exports.getMessages = async (req, res) => {
   const { conversationId } = req.params;
   const userId = req.user?._id || req.user?.userId;
@@ -143,7 +138,6 @@ exports.getMessages = async (req, res) => {
   }
 };
 
-// 4. Mark message as read
 exports.markAsRead = async (req, res) => {
   const { messageId } = req.body;
   const userId = req.user?._id || req.user?.userId;
@@ -159,7 +153,6 @@ exports.markAsRead = async (req, res) => {
     message.messageStatus = "read";
     await message.save();
 
-    // Notify the original sender in real-time
     if (req.io && req.socketUserMap) {
       const senderSocketId = req.socketUserMap.get(message.sender.toString());
       if (senderSocketId) {
@@ -178,7 +171,6 @@ exports.markAsRead = async (req, res) => {
   }
 };
 
-// 5. Delete message
 exports.deleteMessage = async (req, res) => {
   const { messageId } = req.params;
   const userId = req.user?._id || req.user?.userId;
@@ -199,7 +191,6 @@ exports.deleteMessage = async (req, res) => {
   }
 };
 
-// 6. Update message
 exports.updateMessage = async (req, res) => {
   const { messageId } = req.params;
   const { content } = req.body;
@@ -217,9 +208,10 @@ exports.updateMessage = async (req, res) => {
 
     if (file) {
       const uploadResult = await uploadOnCloudinary(file);
-      if (uploadResult?.secure_url) {
-        message.imageOrVideoUrl = uploadResult.secure_url;
+      if (!uploadResult?.secure_url) {
+        return response(res, 400, "File upload failed");
       }
+      message.imageOrVideoUrl = uploadResult.secure_url;
     }
 
     if (content !== undefined) {
@@ -239,7 +231,6 @@ exports.updateMessage = async (req, res) => {
   }
 };
 
-// 7. Delete conversation
 exports.deleteConversation = async (req, res) => {
   const { conversationId } = req.params;
   const userId = req.user?._id || req.user?.userId;
@@ -256,10 +247,9 @@ exports.deleteConversation = async (req, res) => {
     await Message.deleteMany({ conversation: conversationId });
     await conversation.deleteOne();
     
-    // emit socket event
     if (req.io && req.socketUserMap) {
-      // Broadcast the conversation deletion to all connected clients except the one who deleted it
-      const receiverSocketId = req.socketUserMap.get(conversation.participants.find(p => p.toString() !== userId.toString())?.toString());
+      const otherParticipant = conversation.participants.find(p => p.toString() !== userId.toString());
+      const receiverSocketId = req.socketUserMap.get(otherParticipant?.toString());
       if (receiverSocketId) {
         req.io.to(receiverSocketId).emit("conversationDeleted", { conversationId });
       }

@@ -50,14 +50,12 @@ exports.createStatus = async (req, res) => {
       .populate("user", "username profilePicture phoneNumber")
       .populate("viewers", "username profilePicture");
 
-    // Emit Socket Event for Real-time Updates
     if (req.io && req.socketUserMap) {
-      // Broadcast the new status to all connected clients except the one who created it
-    for(const [connectedUserId, socketId] of req.socketUserMap) {
-      if (connectedUserId !== userId.toString()) {
-        req.io.to(socketId).emit("newStatus", populatedStatus);
+      for (const [connectedUserId, socketId] of req.socketUserMap) {
+        if (connectedUserId !== userId.toString()) {
+          req.io.to(socketId).emit("newStatus", populatedStatus);
+        }
       }
-    }
     }
 
     return response(res, 201, "Status created successfully", populatedStatus);
@@ -144,7 +142,6 @@ exports.viewStatus = async (req, res) => {
       .populate("user", "username profilePicture")
       .populate("viewers", "username profilePicture");
 
-    // Emit Socket Event to status owner
     if (req.io && req.socketUserMap) {
       const ownerId = status.user?.toString();
       const statusOwnerSocketId = req.socketUserMap.get(ownerId);
@@ -189,10 +186,8 @@ exports.deleteStatus = async (req, res) => {
 
     await status.deleteOne();
 
-    // Emit Socket Event for Real-time Updates
     if (req.io && req.socketUserMap) {
-      // Broadcast the status deletion to all connected clients except the one who deleted it
-      for(const [connectedUserId, socketId] of req.socketUserMap) {
+      for (const [connectedUserId, socketId] of req.socketUserMap) {
         if (connectedUserId !== userId.toString()) {
           req.io.to(socketId).emit("statusDeleted", { statusId });
         }

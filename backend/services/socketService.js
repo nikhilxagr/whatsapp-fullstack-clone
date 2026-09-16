@@ -2,10 +2,7 @@ const { Server } = require("socket.io");
 const User = require("../models/User");
 const Message = require("../models/Message");
 
-// Map to store online users and their corresponding socket IDs: Map<userId, socketId>
 const onlineUsers = new Map();
-
-// Map to track typing states and auto-stop timeouts: Map<userId, Object>
 const typingUsers = new Map();
 
 const initializeSocket = (server) => {
@@ -22,29 +19,25 @@ const initializeSocket = (server) => {
     console.log("A user connected:", socket.id);
     let currentUserId = null;
 
-    // 1. Handle user connection & online status
     socket.on("userConnected", async (connectingUserId) => {
       try {
         if (!connectingUserId) return;
         currentUserId = connectingUserId;
         onlineUsers.set(currentUserId, socket.id);
         console.log(`User ${currentUserId} connected with socket ID: ${socket.id}`);
-        socket.join(currentUserId); // Join private room for this user
+        socket.join(currentUserId);
 
-        // Update database online status
         await User.findByIdAndUpdate(currentUserId, {
           isOnline: true,
           lastSeen: new Date(),
         });
 
-        // Broadcast status change to all connected clients
         io.emit("userStatusChanged", { userId: currentUserId, isOnline: true });
       } catch (error) {
         console.error("Error updating user online status:", error);
       }
     });
 
-    // 2. Query online status for specific user
     socket.on("getUserStatus", (requestingUserId, callback) => {
       if (typeof callback !== "function") return;
       const isOnline = onlineUsers.has(requestingUserId);
@@ -55,10 +48,9 @@ const initializeSocket = (server) => {
       });
     });
 
-    // 3. Real-time message forwarding
     socket.on("sendMessage", async (messageData) => {
       try {
-        const { sender, receiver, receiverId } = messageData;
+        const { receiver, receiverId } = messageData;
         const targetUserId = receiverId || receiver?._id || receiver;
         const recipientSocketId = onlineUsers.get(targetUserId?.toString());
 
@@ -71,8 +63,7 @@ const initializeSocket = (server) => {
       }
     });
 
-    // 4. Mark message as read
-    socket.on("messageRead", async ({ messageId, readerId }) => {
+    socket.on("messageRead", async ({ messageId }) => {
       try {
         const updatedMessage = await Message.findByIdAndUpdate(
           messageId,
@@ -95,7 +86,6 @@ const initializeSocket = (server) => {
       }
     });
 
-    // 5. Typing Indicator: Start
     socket.on("typing start", ({ conversationId, receiverId }) => {
       if (!currentUserId || !conversationId || !receiverId) return;
 
@@ -110,7 +100,6 @@ const initializeSocket = (server) => {
         clearTimeout(userTyping[`${conversationId}_timeout`]);
       }
 
-      // Auto-stop typing after 3 seconds of inactivity
       userTyping[`${conversationId}_timeout`] = setTimeout(() => {
         userTyping[conversationId] = false;
         const receiverSocketId = onlineUsers.get(receiverId);
@@ -123,7 +112,6 @@ const initializeSocket = (server) => {
         }
       }, 3000);
 
-      // Notify receiver
       const receiverSocketId = onlineUsers.get(receiverId);
       if (receiverSocketId) {
         io.to(receiverSocketId).emit("typing start", {
@@ -134,7 +122,6 @@ const initializeSocket = (server) => {
       }
     });
 
-    // 6. Typing Indicator: Stop
     socket.on("typing stop", ({ conversationId, receiverId }) => {
       if (!currentUserId || !conversationId || !receiverId) return;
 
@@ -158,7 +145,6 @@ const initializeSocket = (server) => {
       }
     });
 
-    // 7. Add or update message reaction
     socket.on("addReaction", async ({ messageId, emoji, reactionUserId }) => {
       try {
         const messageDoc = await Message.findById(messageId);
@@ -175,10 +161,8 @@ const initializeSocket = (server) => {
         if (existingIndex > -1) {
           const existing = messageDoc.reactions[existingIndex];
           if (existing.emoji === emoji) {
-            // Remove reaction if same emoji is clicked again
             messageDoc.reactions.splice(existingIndex, 1);
           } else {
-            // Change reaction emoji
             messageDoc.reactions[existingIndex].emoji = emoji;
           }
         } else {
@@ -208,14 +192,12 @@ const initializeSocket = (server) => {
       }
     });
 
-    // 8. Disconnection handler
     const handleDisconnect = async () => {
       if (!currentUserId) return;
 
       try {
         onlineUsers.delete(currentUserId);
 
-        // Clear all typing timeouts
         if (typingUsers.has(currentUserId)) {
           const userTyping = typingUsers.get(currentUserId);
           Object.keys(userTyping).forEach((key) => {
@@ -226,13 +208,11 @@ const initializeSocket = (server) => {
           typingUsers.delete(currentUserId);
         }
 
-        // Update database offline status and last seen timestamp
         await User.findByIdAndUpdate(currentUserId, {
           isOnline: false,
           lastSeen: new Date(),
         });
 
-        // Broadcast offline status
         io.emit("userStatusChanged", { userId: currentUserId, isOnline: false });
         socket.leave(currentUserId);
         console.log(`User ${currentUserId} disconnected and marked offline`);

@@ -61,9 +61,7 @@ const ChatList = () => {
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-[#111b21] border-r border-[#e9edef] dark:border-[#222e35] select-none transition-colors">
-      {/* Top Header */}
       <div className="h-16 px-4 bg-[#f0f2f5] dark:bg-[#202c33] flex items-center justify-between border-b border-[#e9edef] dark:border-[#222e35] flex-shrink-0">
-        {/* User Profile Avatar */}
         <div
           onClick={() => setActiveTab("profile")}
           className="flex items-center gap-3 cursor-pointer group"
@@ -83,7 +81,6 @@ const ChatList = () => {
           </span>
         </div>
 
-        {/* Action Icons */}
         <div className="flex items-center gap-1 text-[#54656f] dark:text-[#aebac1]">
           <button
             onClick={() => setActiveTab("status")}
@@ -136,7 +133,6 @@ const ChatList = () => {
         </div>
       </div>
 
-      {/* Search Bar & Filter Chips */}
       <div className="p-2.5 bg-white dark:bg-[#111b21] border-b border-[#e9edef] dark:border-[#222e35] flex flex-col gap-2 flex-shrink-0">
         <div className="flex items-center h-9 px-3 bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg text-sm text-[#111b21] dark:text-[#e9edef]">
           <FaSearch className="w-3.5 h-3.5 text-[#8696a0] mr-3 flex-shrink-0" />
@@ -154,7 +150,6 @@ const ChatList = () => {
           )}
         </div>
 
-        {/* Filter Pills */}
         <div className="flex items-center gap-1.5 px-1">
           <button
             onClick={() => setFilterType("all")}
@@ -179,7 +174,6 @@ const ChatList = () => {
         </div>
       </div>
 
-      {/* Conversations List */}
       <div className="flex-1 overflow-y-auto divide-y divide-[#e9edef]/60 dark:divide-[#222e35]/60">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16 text-[#8696a0]">
@@ -209,7 +203,6 @@ const ChatList = () => {
                     : "hover:bg-[#f5f6f6] dark:hover:bg-[#202c33]/70"
                 }`}
               >
-                {/* Contact Avatar with Online Indicator */}
                 <div className="relative flex-shrink-0">
                   <img
                     src={getAvatarUrl(userItem, userItem.username)}
@@ -225,7 +218,6 @@ const ChatList = () => {
                   )}
                 </div>
 
-                {/* Contact Name & Message Snippet */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1">
                     <h2 className="text-sm font-semibold text-[#111b21] dark:text-[#e9edef] truncate">

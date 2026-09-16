@@ -1,71 +1,87 @@
 import axiosInstance from "./url.service";
 
-export const sendOtp = async (phoneNumber, phoneSuffix, email) => {
+export const register = async ({ email, password, phoneNumber, phoneSuffix }) => {
   try {
-    const response = await axiosInstance.post("/auth/send-otp", {
-      phoneNumber,
-      phoneSuffix,
+    const res = await axiosInstance.post("/auth/register", {
       email,
+      password,
+      phoneNumber: phoneNumber || undefined,
+      phoneSuffix: phoneSuffix || undefined,
     });
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || error.message;
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err.message;
   }
 };
 
-export const verifyOtp = async (phoneNumber, phoneSuffix, otp, email) => {
+export const verifyEmail = async ({ email, otp }) => {
   try {
-    const response = await axiosInstance.post("/auth/verify-otp", {
-      phoneNumber,
-      phoneSuffix,
-      otp,
-      email,
-    });
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || error.message;
+    const res = await axiosInstance.post("/auth/verify-email", { email, otp });
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err.message;
   }
 };
 
-export const updateUserProfile = async (formData) => {
+export const loginWithEmail = async ({ email, password }) => {
   try {
-    const isFormData = typeof FormData !== "undefined" && formData instanceof FormData;
-    const response = await axiosInstance.put("/auth/update-profile", formData, {
-      headers: isFormData ? { "Content-Type": "multipart/form-data" } : undefined,
-    });
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || error.message;
+    const res = await axiosInstance.post("/auth/login/email", { email, password });
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err.message;
+  }
+};
+
+export const loginWithPhone = async ({ phoneNumber, phoneSuffix, password }) => {
+  try {
+    const res = await axiosInstance.post("/auth/login/phone", { phoneNumber, phoneSuffix, password });
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err.message;
   }
 };
 
 export const checkUserAuth = async () => {
   try {
-    const response = await axiosInstance.get("/auth/check-auth");
-    if (response.data.status === "success") {
-      const user = response.data.data?.user || response.data.data;
+    const res = await axiosInstance.get("/auth/check-auth");
+    if (res.data.status === "success") {
+      const user = res.data.data?.user || res.data.data;
       return { isAuthenticated: true, user };
     }
-    return { isAuthenticated: false };
-  } catch (error) {
-    return { isAuthenticated: false };
+    return { isAuthenticated: false, user: null };
+  } catch {
+    return { isAuthenticated: false, user: null };
+  }
+};
+
+export const updateUserProfile = async (data) => {
+  try {
+    const isFormData = typeof FormData !== "undefined" && data instanceof FormData;
+    const res = await axiosInstance.put("/auth/update-profile", data, {
+      headers: isFormData
+        ? { "Content-Type": "multipart/form-data" }
+        : { "Content-Type": "application/json" },
+    });
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err.message;
   }
 };
 
 export const logoutUser = async () => {
   try {
-    const response = await axiosInstance.post("/auth/logout");
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || error.message;
+    const res = await axiosInstance.post("/auth/logout");
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err.message;
   }
 };
 
 export const getAllUsers = async () => {
   try {
-    const response = await axiosInstance.get("/auth/users");
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || error.message;
+    const res = await axiosInstance.get("/auth/users");
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err.message;
   }
 };
