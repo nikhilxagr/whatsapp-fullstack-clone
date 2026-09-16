@@ -16,6 +16,11 @@ const userSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
     },
+    password: {
+      type: String,
+      required: false,
+      select: false, // never returned in queries unless explicitly requested
+    },
     email: {
       type: String,
       unique: true,

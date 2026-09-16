@@ -1,198 +1,251 @@
+const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const Conversation = require("../models/Conversation");
-const optGenerator = require("../utils/otpGenerator");
+const otpGenerator = require("../utils/otpGenerator");
 const { sendOtpToEmail } = require("../services/emailService");
-const { sendOtpToPhoneNumber, verifyOtp: verifyPhoneOtp } = require("../services/phoneService");
 const response = require("../utils/responseHandler");
 const generateToken = require("../utils/generateToken");
 
+// Set JWT cookie and return the token
+const issueToken = (res, userId) => {
+  const token = generateToken(userId);
+  res.cookie("auth_token", token, {
+    httpOnly: true,
+    maxAge: 1000 * 60 * 60 * 24 * 365,
+    sameSite: "lax",
+  });
+  return token;
+};
 
-// Step - 1: Send OTP (Email or Phone)
-const sendOtp = async (req, res) => {
-  const { phoneNumber, phoneSuffix, email } = req.body;
-  const otp = optGenerator();
-  const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // OTP expires in 5 minutes
+// Step 1 of registration: save user with hashed password and send OTP to email
+const register = async (req, res) => {
+  const { email, password, phoneNumber, phoneSuffix } = req.body;
+
+  if (!email || !password) {
+    return response(res, 400, "Email and password are required");
+  }
+  if (password.length < 6) {
+    return response(res, 400, "Password must be at least 6 characters");
+  }
 
   try {
-    // 1. Email OTP Flow
-    if (email) {
-      let user = await User.findOne({ email });
-      if (!user) {
-        user = new User({ email });
-      }
-      user.emailOtp = otp;
-      user.emailOtpExpiry = otpExpiry;
-      await user.save();
-
-      await sendOtpToEmail(email, otp);
-      return response(res, 200, "OTP sent successfully to email", { otp });
+    const existing = await User.findOne({ email: email.toLowerCase() });
+    if (existing && existing.isVerified) {
+      return response(res, 409, "An account with this email already exists. Please sign in.");
     }
 
-    // 2. Phone OTP Flow
+    const otp = otpGenerator();
+    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    let user = existing || new User({});
+    user.email = email.toLowerCase();
+    user.password = hashedPassword;
+    user.emailOtp = otp;
+    user.emailOtpExpiry = otpExpiry;
+    user.isVerified = false;
+
     if (phoneNumber && phoneSuffix) {
-      const fullPhoneNumber = `${phoneSuffix}${phoneNumber}`;
-      let user = await User.findOne({ phoneNumber: fullPhoneNumber });
-      if (!user) {
-        user = new User({ phoneNumber: fullPhoneNumber, phoneSuffix });
-      }
-      user.phoneOtp = otp;
-      user.phoneOtpExpiry = otpExpiry;
-      await user.save();
-
-      // Attempt SMS delivery via Twilio if configured, fallback gracefully
-      try {
-        await sendOtpToPhoneNumber(fullPhoneNumber);
-      } catch (smsError) {
-        console.log(`ℹ️ [SMS Service Info] Real SMS skipped (${smsError.message}). Using database OTP: ${otp}`);
-      }
-
-      // Returned in response for frontend testing & instant preview
-      return response(res, 200, "OTP sent successfully to phone", { otp, phoneNumber: fullPhoneNumber });
+      user.phoneNumber = `${phoneSuffix}${phoneNumber}`;
+      user.phoneSuffix = phoneSuffix;
     }
 
-    // 3. Neither provided
-    return response(
-      res,
-      400,
-      "Please provide an email or a valid phone number and country code"
-    );
-  } catch (error) {
-    console.error("Error occurred while sending OTP:", error);
-    return response(res, 500, "Internal server error", {
-      error: error.message,
-    });
+    await user.save();
+    await sendOtpToEmail(email.toLowerCase(), otp);
+
+    return response(res, 200, "Verification code sent to your email", { email });
+  } catch (err) {
+    console.error("Register error:", err.message, err.code);
+    if (err.code === 11000) {
+      return response(res, 409, "Email or phone already registered");
+    }
+    return response(res, 500, "Registration failed", { error: err.message });
   }
 };
 
-// Step - 2: Verify OTP
-const verifyOtp = async (req, res) => {
-  const { email, phoneNumber, phoneSuffix, otp } = req.body;
+// Step 2 of registration: verify OTP and activate account
+const verifyEmail = async (req, res) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) {
+    return response(res, 400, "Email and OTP are required");
+  }
+
   try {
-    let user;
-    const now = new Date();
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) return response(res, 404, "User not found");
 
-    // 1. Verify Email OTP
-    if (email) {
-      user = await User.findOne({ email });
-      if (!user) {
-        return response(res, 404, "User not found");
-      }
-      if (
-        !user.emailOtp ||
-        String(user.emailOtp) !== String(otp) ||
-        now > new Date(user.emailOtpExpiry)
-      ) {
-        return response(res, 400, "Invalid or expired OTP");
-      }
-      user.isVerified = true;
-      user.emailOtp = null;
-      user.emailOtpExpiry = null;
-      await user.save();
-    } 
-    // 2. Verify Phone OTP
-    else {
-      if (!phoneNumber || !phoneSuffix) {
-        return response(res, 400, "Phone number and phone suffix are required");
-      }
-      const fullPhoneNumber = `${phoneSuffix}${phoneNumber}`;
-      user = await User.findOne({ phoneNumber: fullPhoneNumber });
-      if (!user) {
-        return response(res, 404, "User not found");
-      }
-      if (
-        !user.phoneOtp ||
-        String(user.phoneOtp) !== String(otp) ||
-        now > new Date(user.phoneOtpExpiry)
-      ) {
-        return response(res, 400, "Invalid or expired OTP");
-      }
-      user.isVerified = true;
-      user.phoneOtp = null;
-      user.phoneOtpExpiry = null;
-      await user.save();
+    if (!user.emailOtp || String(user.emailOtp) !== String(otp)) {
+      return response(res, 400, "Invalid verification code");
+    }
+    if (new Date() > new Date(user.emailOtpExpiry)) {
+      return response(res, 400, "Verification code has expired. Please register again.");
     }
 
-    const token = generateToken(user?._id);
-    res.cookie("auth_token", token, {
-      httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24 * 365, // 1 year
-      sameSite: "lax",
-    });
+    user.isVerified = true;
+    user.emailOtp = null;
+    user.emailOtpExpiry = null;
+    await user.save();
 
-    return response(res, 200, "OTP verified successfully", { token, user });
-  } catch (error) {
-    console.error("Error occurred while verifying OTP:", error);
-    return response(res, 500, "Internal server error", {
-      error: error.message,
-    });
+    const token = issueToken(res, user._id);
+    return response(res, 200, "Email verified successfully", { token, user });
+  } catch (err) {
+    console.error("Verify email error:", err.message);
+    return response(res, 500, "Verification failed", { error: err.message });
   }
 };
 
+// Login with email + password
+const loginWithEmail = async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return response(res, 400, "Email and password are required");
+  }
+
+  try {
+    const user = await User.findOne({ email: email.toLowerCase() }).select("+password");
+    if (!user) return response(res, 401, "No account found with this email");
+    if (!user.isVerified) {
+      return response(res, 401, "Please verify your email before signing in");
+    }
+    if (!user.password) {
+      return response(res, 401, "This account does not have a password. Please use another login method.");
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return response(res, 401, "Incorrect password");
+
+    const token = issueToken(res, user._id);
+    const safeUser = await User.findById(user._id);
+    return response(res, 200, "Signed in successfully", { token, user: safeUser });
+  } catch (err) {
+    console.error("Login email error:", err.message);
+    return response(res, 500, "Login failed", { error: err.message });
+  }
+};
+
+// Login with phone number + password (phone must have been added at registration)
+const loginWithPhone = async (req, res) => {
+  const { phoneNumber, phoneSuffix, password } = req.body;
+  if (!phoneNumber || !phoneSuffix || !password) {
+    return response(res, 400, "Phone number, country code, and password are required");
+  }
+
+  try {
+    const fullPhone = `${phoneSuffix}${phoneNumber}`;
+    const user = await User.findOne({ phoneNumber: fullPhone }).select("+password");
+    if (!user) return response(res, 401, "No account found with this phone number");
+    if (!user.isVerified) {
+      return response(res, 401, "Please verify your account email first");
+    }
+    if (!user.password) {
+      return response(res, 401, "This account does not have a password set");
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return response(res, 401, "Incorrect password");
+
+    const token = issueToken(res, user._id);
+    const safeUser = await User.findById(user._id);
+    return response(res, 200, "Signed in successfully", { token, user: safeUser });
+  } catch (err) {
+    console.error("Login phone error:", err.message);
+    return response(res, 500, "Login failed", { error: err.message });
+  }
+};
+
+// Update username, avatar, or about text
 const updateProfile = async (req, res) => {
   try {
     const { username, agreed, about, profilePicture: avatarUrl } = req.body;
     const userId = req.user?._id;
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return response(res, 404, "User not found");
+    if (!userId) return response(res, 401, "Unauthorized");
+
+    const updates = {};
+
+    if (req.file) {
+      try {
+        const { uploadOnCloudinary } = require("../config/cloudinaryConfig");
+        const uploadResult = await uploadOnCloudinary(req.file);
+        if (uploadResult?.secure_url) {
+          updates.profilePicture = uploadResult.secure_url;
+        }
+      } catch (uploadErr) {
+        console.error("Profile picture upload failed:", uploadErr.message);
+      }
+    } else if (avatarUrl !== undefined) {
+      // Allows updating avatar URL or passing empty string to remove avatar
+      updates.profilePicture = avatarUrl || "";
     }
 
-    const file = req.file;
-    if (file) {
-      const { uploadOnCloudinary } = require("../config/cloudinaryConfig");
-      const uploadResult = await uploadOnCloudinary(file);
-      console.log("Upload Result:", uploadResult);
-      user.profilePicture = uploadResult?.secure_url;
-    } else if (avatarUrl) {
-      user.profilePicture = avatarUrl;
+    if (username !== undefined) {
+      const trimmedName = username.trim();
+      if (!trimmedName) {
+        return response(res, 400, "Name cannot be empty");
+      }
+      if (trimmedName !== req.user.username) {
+        updates.username = trimmedName;
+      }
     }
 
-    if (username) user.username = username;
-    if (agreed !== undefined) user.agree = agreed;
-    if (about) user.about = about;
-    await user.save();
+    if (agreed !== undefined) updates.agree = agreed;
 
-    return response(res, 200, "Profile updated successfully", { user });
-  } catch (error) {
-    console.error("Error occurred while updating profile:", error);
-    return response(res, 500, "Internal server error", {
-      error: error.message,
-    });
+    if (about !== undefined) {
+      updates.about = about.trim();
+    }
+
+    if (Object.keys(updates).length === 0) {
+      const user = await User.findById(userId);
+      return response(res, 200, "No changes made", { user });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: updates },
+      { new: true }
+    );
+
+    if (!updatedUser) return response(res, 404, "User not found");
+
+    // Broadcast update to other users via socket
+    if (req.io) {
+      req.io.emit("userUpdated", {
+        _id: updatedUser._id,
+        username: updatedUser.username,
+        profilePicture: updatedUser.profilePicture,
+        about: updatedUser.about,
+      });
+    }
+
+    return response(res, 200, "Profile updated successfully", { user: updatedUser });
+  } catch (err) {
+    console.error("Update profile error:", err.message, err.code);
+    if (err.code === 11000) {
+      const field = Object.keys(err.keyPattern || {})[0] || "field";
+      return response(res, 409, `That ${field} is already taken. Please choose another.`);
+    }
+    return response(res, 500, "Internal server error", { error: err.message });
   }
 };
 
-// Step - 4: Logout
 const logout = async (req, res) => {
   try {
-    res.cookie("auth_token", "", {
-      httpOnly: true,
-      expires: new Date(0),
-      sameSite: "lax",
-    });
+    res.cookie("auth_token", "", { httpOnly: true, expires: new Date(0), sameSite: "lax" });
     return response(res, 200, "Logged out successfully");
-  } catch (error) {
-    console.error("Error occurred while logging out:", error);
-    return response(res, 500, "Internal server error", {
-      error: error.message,
-    });
+  } catch (err) {
+    return response(res, 500, "Logout failed", { error: err.message });
   }
 };
 
-// Step - 5: Check Authentication Status
 const checkAuthenticated = async (req, res) => {
   try {
-    const user = req.user;
-    return response(res, 200, "User is authenticated", { user });
-  } catch (error) {
-    console.error("Error occurred while checking authentication:", error);
-    return response(res, 500, "Internal server error", {
-      error: error.message,
-    });
+    return response(res, 200, "User is authenticated", { user: req.user });
+  } catch (err) {
+    return response(res, 500, "Internal server error", { error: err.message });
   }
 };
 
-// Step - 6: Get All Users with existing conversations (excluding logged-in user)
+// Return all users except the logged-in one, with their last conversation snapshot
 const getAllUsers = async (req, res) => {
   const loggedInUser = req.user?._id || req.user?.userId;
 
@@ -212,32 +265,21 @@ const getAllUsers = async (req, res) => {
           })
           .lean();
 
-        return {
-          ...user,
-          conversation: conversation || null,
-        };
+        return { ...user, conversation: conversation || null };
       })
     );
 
-    return response(res, 200, "Users fetched successfully", {
-      users: usersWithConversation,
-    });
-  } catch (error) {
-    console.error("Error occurred while fetching all users:", error);
-    return response(res, 500, "Internal server error", {
-      error: error.message,
-    });
+    return response(res, 200, "Users fetched successfully", { users: usersWithConversation });
+  } catch (err) {
+    console.error("Get all users error:", err.message);
+    return response(res, 500, "Internal server error", { error: err.message });
   }
 };
 
-
-// Step - 7: Verify Firebase Phone Token & Log In / Sign Up
+// Firebase phone login — kept for compatibility
 const verifyFirebasePhone = async (req, res) => {
   const { idToken, phoneSuffix } = req.body;
-
-  if (!idToken) {
-    return response(res, 400, "Firebase ID Token is required");
-  }
+  if (!idToken) return response(res, 400, "Firebase ID Token is required");
 
   try {
     const { verifyFirebaseToken } = require("../services/firebaseService");
@@ -261,34 +303,22 @@ const verifyFirebasePhone = async (req, res) => {
       await user.save();
     }
 
-    const token = generateToken(user._id);
-    res.cookie("auth_token", token, {
-      httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24 * 365, // 1 year
-      sameSite: "lax",
-    });
-
-    return response(res, 200, "Phone verified successfully via Firebase", {
-      token,
-      user,
-    });
-  } catch (error) {
-    console.error("Error verifying Firebase phone token:", error);
-    return response(res, 401, error.message || "Failed to verify phone token", {
-      error: error.message,
-    });
+    const token = issueToken(res, user._id);
+    return response(res, 200, "Phone verified successfully via Firebase", { token, user });
+  } catch (err) {
+    console.error("Firebase phone verify error:", err.message);
+    return response(res, 401, err.message || "Failed to verify phone token", { error: err.message });
   }
 };
 
 module.exports = {
-  sendOtp,
-  verifyOtp,
-  verifyFirebasePhone,
+  register,
+  verifyEmail,
+  loginWithEmail,
+  loginWithPhone,
   updateProfile,
   logout,
   checkAuthenticated,
   getAllUsers,
+  verifyFirebasePhone,
 };
-
-
-

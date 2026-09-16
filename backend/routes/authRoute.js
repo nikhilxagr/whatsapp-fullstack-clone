@@ -5,21 +5,23 @@ const { multerMiddleware } = require("../config/cloudinaryConfig");
 
 const router = express.Router();
 
-// Public auth routes
-router.post("/send-otp", authController.sendOtp);
-router.post("/verify-otp", authController.verifyOtp);
-router.post("/verify-firebase-phone", authController.verifyFirebasePhone);
-router.post("/logout", authController.logout);
+// Registration & email verification
+router.post("/register", authController.register);
+router.post("/verify-email", authController.verifyEmail);
 
-// Protected auth routes
+// Login options
+router.post("/login/email", authController.loginWithEmail);
+router.post("/login/phone", authController.loginWithPhone);
+
+// Firebase (kept for compatibility)
+router.post("/verify-firebase-phone", authController.verifyFirebasePhone);
+
+// Session
+router.post("/logout", authController.logout);
 router.get("/check-auth", authMiddleware, authController.checkAuthenticated);
+
+// Protected
 router.get("/users", authMiddleware, authController.getAllUsers);
-router.put(
-  "/update-profile",
-  authMiddleware,
-  multerMiddleware,
-  authController.updateProfile
-);
+router.put("/update-profile", authMiddleware, multerMiddleware, authController.updateProfile);
 
 module.exports = router;
-

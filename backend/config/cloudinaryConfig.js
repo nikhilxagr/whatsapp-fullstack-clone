@@ -58,6 +58,16 @@ const storage = multer.diskStorage({
   },
 });
 
-const multerMiddleware = multer({ storage }).single("file");
+const uploadSingle = multer({ storage }).single("file");
+
+const multerMiddleware = (req, res, next) => {
+  uploadSingle(req, res, (err) => {
+    if (err) {
+      console.warn("Multer warning:", err.message);
+      return next();
+    }
+    next();
+  });
+};
 
 module.exports = { uploadOnCloudinary, cloudinary, multerMiddleware };
