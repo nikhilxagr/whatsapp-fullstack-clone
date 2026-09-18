@@ -138,6 +138,57 @@ exports.getMessages = async (req, res) => {
   }
 };
 
+exports.markMessagesAsRead = async (req, res) => {
+  const { messageIds, conversationId } = req.body;
+  const userId = req.user?._id || req.user?.userId;
+
+  try {
+    const filter = {
+      receiver: userId,
+      messageStatus: { $ne: "read" },
+    };
+
+    if (Array.isArray(messageIds) && messageIds.length > 0) {
+      filter._id = { $in: messageIds };
+    } else if (conversationId) {
+      filter.conversation = conversationId;
+    } else {
+      return response(res, 400, "messageIds or conversationId is required");
+    }
+
+    const messagesToUpdate = await Message.find(filter);
+    await Message.updateMany(filter, { $set: { messageStatus: "read" } });
+
+    if (conversationId) {
+      await Conversation.findByIdAndUpdate(conversationId, { unreadCount: 0 });
+    }
+
+    if (req.io && req.socketUserMap) {
+      messagesToUpdate.forEach((msg) => {
+        const senderSocketId = req.socketUserMap.get(msg.sender.toString());
+        if (senderSocketId) {
+          const payload = {
+            messageId: msg._id,
+            _id: msg._id,
+            conversationId: msg.conversation,
+            messageStatus: "read",
+          };
+          req.io.to(senderSocketId).emit("message_status_update", payload);
+          req.io.to(senderSocketId).emit("messageRead", payload);
+        }
+      });
+    }
+
+    return response(res, 200, "Messages marked as read successfully", {
+      count: messagesToUpdate.length,
+      updatedIds: messagesToUpdate.map((m) => m._id),
+    });
+  } catch (error) {
+    console.error("Error marking messages as read:", error);
+    return response(res, 500, "Failed to mark messages as read", { error: error.message });
+  }
+};
+
 exports.markAsRead = async (req, res) => {
   const { messageId } = req.body;
   const userId = req.user?._id || req.user?.userId;
@@ -156,11 +207,14 @@ exports.markAsRead = async (req, res) => {
     if (req.io && req.socketUserMap) {
       const senderSocketId = req.socketUserMap.get(message.sender.toString());
       if (senderSocketId) {
-        req.io.to(senderSocketId).emit("messageRead", {
+        const payload = {
+          messageId: message._id,
           _id: message._id,
           conversationId: message.conversation,
           messageStatus: "read",
-        });
+        };
+        req.io.to(senderSocketId).emit("message_status_update", payload);
+        req.io.to(senderSocketId).emit("messageRead", payload);
       }
     }
 
@@ -184,6 +238,15 @@ exports.deleteMessage = async (req, res) => {
     }
 
     await message.deleteOne();
+
+    if (req.io && req.socketUserMap) {
+      const receiverSocketId = req.socketUserMap.get(message.receiver.toString());
+      if (receiverSocketId) {
+        req.io.to(receiverSocketId).emit("message_deleted", { deletedMessageId: messageId });
+        req.io.to(receiverSocketId).emit("messageDeleted", { deletedMessageId: messageId });
+      }
+    }
+
     return response(res, 200, "Message deleted successfully", message);
   } catch (error) {
     console.error("Error deleting message:", error);
