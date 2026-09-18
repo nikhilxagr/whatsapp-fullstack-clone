@@ -49,7 +49,7 @@ const FieldError = ({ msg }) =>
   msg ? <p className="text-red-500 text-xs mt-1.5 font-medium">{msg}</p> : null;
 
 const InputWrap = ({ children }) => (
-  <div className="flex items-center h-12 w-full rounded-xl border border-[#d1d7db] dark:border-[#2a3942] bg-[#f8fafc] dark:bg-[#202c33] focus-within:border-[#00a884] focus-within:ring-2 focus-within:ring-[#00a884]/20 transition-all duration-200 px-3.5 gap-3">
+  <div className="flex items-center h-12 w-full rounded-xl border border-[#d1d7db] dark:border-[#2a3942] bg-[#f8fafc] dark:bg-[#202c33] focus-within:border-[#075e54] dark:focus-within:border-[#008069] focus-within:ring-2 focus-within:ring-[#075e54]/20 dark:focus-within:ring-[#008069]/20 transition-all duration-200 px-3.5 gap-3">
     {children}
   </div>
 );
@@ -71,7 +71,7 @@ const PasswordInput = ({ value, onChange, placeholder = "Password", id }) => {
       <button
         type="button"
         onClick={() => setShow((s) => !s)}
-        className="text-[#8696a0] hover:text-[#00a884] transition-colors flex-shrink-0"
+        className="text-[#8696a0] hover:text-[#075e54] dark:hover:text-[#008069] transition-colors flex-shrink-0"
       >
         {show ? <FaEyeSlash className="w-4 h-4" /> : <FaEye className="w-4 h-4" />}
       </button>
@@ -104,7 +104,7 @@ const CountrySelector = ({ selected, onSelect }) => {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 h-12 px-3 bg-[#f8fafc] dark:bg-[#202c33] border border-[#d1d7db] dark:border-[#2a3942] focus:border-[#00a884] focus:ring-2 focus:ring-[#00a884]/20 rounded-xl text-sm font-medium text-[#111b21] dark:text-[#e9edef] transition-all whitespace-nowrap"
+        className="flex items-center gap-1.5 h-12 px-3 bg-[#f8fafc] dark:bg-[#202c33] border border-[#d1d7db] dark:border-[#2a3942] focus:border-[#075e54] dark:focus:border-[#008069] focus:ring-2 focus:ring-[#075e54]/20 rounded-xl text-sm font-medium text-[#111b21] dark:text-[#e9edef] transition-all whitespace-nowrap"
       >
         <span className="text-base leading-none">{selected.flag}</span>
         <span className="text-xs font-semibold text-[#54656f] dark:text-[#8696a0]">{selected.alpha2}</span>
@@ -136,7 +136,7 @@ const CountrySelector = ({ selected, onSelect }) => {
                   onClick={() => { onSelect(c); setOpen(false); setSearch(""); }}
                   className={`w-full text-left px-3.5 py-2 text-xs flex items-center justify-between hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] transition-colors ${
                     selected.alpha2 === c.alpha2
-                      ? "bg-emerald-50 dark:bg-[#00a884]/10 text-[#00a884] font-semibold"
+                      ? "bg-[#075e54]/10 dark:bg-[#008069]/15 text-[#075e54] dark:text-[#00a884] font-semibold"
                       : "text-[#111b21] dark:text-[#e9edef]"
                   }`}
                 >
@@ -370,25 +370,38 @@ const Login = () => {
   const stepLabel = ["Credentials", "Verify Email", "Profile Setup"];
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-[#eae6df] dark:bg-[#0c1317] transition-colors duration-300 selection:bg-[#00a884] selection:text-white">
-      {/* Green banner */}
-      <div className="absolute top-0 left-0 right-0 h-56 bg-gradient-to-r from-[#00a884] via-[#075e54] to-[#128c7e] dark:from-[#111b21] dark:via-[#182229] dark:to-[#111b21] dark:border-b dark:border-[#222e35] transition-colors" />
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-[#075e54] via-[#054c44] to-[#04332d] dark:from-[#052b24] dark:via-[#071f1b] dark:to-[#031512] transition-colors duration-300 selection:bg-[#00a884] selection:text-white relative overflow-hidden">
+      {/* WhatsApp Dark Green Top Banner */}
+      <div className="absolute top-0 left-0 right-0 h-64 bg-gradient-to-r from-[#075e54] via-[#008069] to-[#054c44] dark:from-[#063b33] dark:via-[#075e54] dark:to-[#05322b] shadow-lg border-b border-black/10 dark:border-white/5 transition-colors" />
+
+      {/* Ambient radial lighting */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(0,168,132,0.18),transparent_65%)] pointer-events-none" />
+
+      {/* Subtle WhatsApp chat pattern overlay */}
+      <div
+        className="absolute inset-0 opacity-[0.035] dark:opacity-[0.04] pointer-events-none"
+        style={{
+          backgroundImage: `radial-gradient(#ffffff 1px, transparent 1px), radial-gradient(#ffffff 1px, transparent 1px)`,
+          backgroundSize: "28px 28px",
+          backgroundPosition: "0 0, 14px 14px",
+        }}
+      />
 
       {/* Top bar */}
       <header className="relative z-10 w-full max-w-[440px] flex items-center justify-between px-1 mb-6">
         <div className="flex items-center gap-2.5 text-white">
-          <FaWhatsapp className="w-7 h-7 drop-shadow-sm" />
-          <span className="font-bold tracking-wider text-sm uppercase">WhatsApp Web</span>
+          <FaWhatsapp className="w-8 h-8 drop-shadow-md text-[#25d366] sm:text-white" />
+          <span className="font-bold tracking-wider text-sm uppercase drop-shadow-sm">WhatsApp Web</span>
         </div>
         <button
           type="button"
           onClick={toggleTheme}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 dark:bg-[#202c33] dark:hover:bg-[#2a3942] text-white dark:text-[#e9edef] backdrop-blur-md text-xs font-medium transition-all shadow-sm"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 dark:bg-black/25 dark:hover:bg-black/35 text-white backdrop-blur-md text-xs font-medium transition-all shadow-sm border border-white/20"
         >
           {theme === "dark" ? (
             <><FaSun className="w-3.5 h-3.5 text-amber-400" /><span>Light</span></>
           ) : (
-            <><FaMoon className="w-3.5 h-3.5 text-slate-100" /><span>Dark</span></>
+            <><FaMoon className="w-3.5 h-3.5 text-emerald-200" /><span>Dark</span></>
           )}
         </button>
       </header>
@@ -399,7 +412,7 @@ const Login = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
-        className="relative z-10 w-full max-w-[440px] bg-white dark:bg-[#111b21] border border-gray-200/80 dark:border-[#222e35] rounded-2xl shadow-[0_16px_40px_-12px_rgba(0,0,0,0.14)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] p-7 sm:p-9 transition-colors"
+        className="relative z-10 w-full max-w-[440px] bg-white dark:bg-[#111b21] border border-[#075e54]/15 dark:border-[#1e3d36] rounded-2xl shadow-[0_20px_50px_-10px_rgba(0,0,0,0.35)] dark:shadow-[0_25px_60px_rgba(0,0,0,0.7)] p-7 sm:p-9 transition-colors backdrop-blur-sm"
       >
         {/* WhatsApp icon */}
         <div className="flex justify-center mb-5">
@@ -407,24 +420,24 @@ const Login = () => {
             initial={{ scale: 0.8 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring", stiffness: 260, damping: 20 }}
-            className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#00a884] to-[#25d366] shadow-lg shadow-[#00a884]/25 flex items-center justify-center"
+            className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#075e54] via-[#008069] to-[#25d366] shadow-lg shadow-[#075e54]/30 flex items-center justify-center"
           >
-            <FaWhatsapp className="w-10 h-10 text-white drop-shadow-sm" />
+            <FaWhatsapp className="w-10 h-10 text-white drop-shadow-md" />
           </motion.div>
         </div>
 
         {/* Mode tab toggle (only on step 1 of register or login screen) */}
         {(mode === "login" || (mode === "register" && step === 1)) && (
-          <div className="flex rounded-xl overflow-hidden border border-[#e9edef] dark:border-[#2a3942] mb-6">
+          <div className="flex rounded-xl overflow-hidden border border-[#075e54]/20 dark:border-[#2a3942] bg-[#f0f2f5] dark:bg-[#202c33]/70 p-1 mb-6">
             {["login", "register"].map((m) => (
               <button
                 key={m}
                 type="button"
                 onClick={() => { setMode(m); clearError(); setEmail(""); setPassword(""); setPhone(""); }}
-                className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
+                className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
                   mode === m
-                    ? "bg-[#00a884] text-white"
-                    : "bg-transparent text-[#54656f] dark:text-[#8696a0] hover:bg-[#f0f2f5] dark:hover:bg-[#202c33]"
+                    ? "bg-[#075e54] dark:bg-[#008069] text-white shadow-sm"
+                    : "bg-transparent text-[#54656f] dark:text-[#8696a0] hover:text-[#075e54] dark:hover:text-white"
                 }`}
               >
                 {m === "login" ? "Sign In" : "Create Account"}
@@ -436,13 +449,13 @@ const Login = () => {
         {/* Progress bar — register flow only */}
         {mode === "register" && (
           <div className="mb-5">
-            <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[#00a884] mb-1.5">
+            <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[#075e54] dark:text-[#00a884] mb-1.5">
               <span>Step {step} of 3</span>
               <span>{stepLabel[step - 1]}</span>
             </div>
             <div className="w-full h-1.5 bg-[#e9edef] dark:bg-[#202c33] rounded-full overflow-hidden">
               <motion.div
-                className="h-full bg-[#00a884] rounded-full"
+                className="h-full bg-gradient-to-r from-[#075e54] to-[#00a884] rounded-full"
                 animate={{ width: `${(step / 3) * 100}%` }}
                 transition={{ duration: 0.3 }}
               />
@@ -496,7 +509,7 @@ const Login = () => {
                   onClick={() => { setLoginMethod(m); clearError(); }}
                   className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors border ${
                     loginMethod === m
-                      ? "bg-[#00a884]/10 border-[#00a884] text-[#00a884]"
+                      ? "bg-[#075e54]/10 dark:bg-[#008069]/20 border-[#075e54] dark:border-[#008069] text-[#075e54] dark:text-[#00a884]"
                       : "border-[#e9edef] dark:border-[#2a3942] text-[#54656f] dark:text-[#8696a0] hover:bg-[#f0f2f5] dark:hover:bg-[#202c33]"
                   }`}
                 >
@@ -527,7 +540,7 @@ const Login = () => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full h-12 mt-2 rounded-xl bg-[#00a884] hover:bg-[#02906f] active:bg-[#008069] text-white font-semibold text-sm tracking-wide transition-all shadow-md shadow-[#00a884]/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full h-12 mt-2 rounded-xl bg-[#075e54] hover:bg-[#064e45] active:bg-[#053e37] dark:bg-[#008069] dark:hover:bg-[#00a884] dark:active:bg-[#075e54] text-white font-semibold text-sm tracking-wide transition-all shadow-md shadow-[#075e54]/25 dark:shadow-[#008069]/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {loading ? <Spinner /> : "Sign In"}
                 </button>
@@ -553,7 +566,7 @@ const Login = () => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full h-12 mt-2 rounded-xl bg-[#00a884] hover:bg-[#02906f] active:bg-[#008069] text-white font-semibold text-sm tracking-wide transition-all shadow-md shadow-[#00a884]/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full h-12 mt-2 rounded-xl bg-[#075e54] hover:bg-[#064e45] active:bg-[#053e37] dark:bg-[#008069] dark:hover:bg-[#00a884] dark:active:bg-[#075e54] text-white font-semibold text-sm tracking-wide transition-all shadow-md shadow-[#075e54]/25 dark:shadow-[#008069]/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {loading ? <Spinner /> : "Sign In with Phone"}
                 </button>
@@ -567,7 +580,7 @@ const Login = () => {
             {/* Email */}
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-[#54656f] dark:text-[#8696a0] mb-1.5">
-                Email <span className="text-[#00a884]">*</span>
+                Email <span className="text-[#075e54] dark:text-[#008069]">*</span>
               </label>
               <InputWrap>
                 <FaEnvelope className="w-3.5 h-3.5 text-[#8696a0] flex-shrink-0" />
@@ -586,7 +599,7 @@ const Login = () => {
             {/* Password */}
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-[#54656f] dark:text-[#8696a0] mb-1.5">
-                Password <span className="text-[#00a884]">*</span>
+                Password <span className="text-[#075e54] dark:text-[#008069]">*</span>
               </label>
               <PasswordInput id="reg-pass" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min. 6 characters" />
             </div>
@@ -594,7 +607,7 @@ const Login = () => {
             {/* Confirm Password */}
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-[#54656f] dark:text-[#8696a0] mb-1.5">
-                Confirm Password <span className="text-[#00a884]">*</span>
+                Confirm Password <span className="text-[#075e54] dark:text-[#008069]">*</span>
               </label>
               <PasswordInput id="reg-confirm" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Re-enter password" />
             </div>
@@ -622,7 +635,7 @@ const Login = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-12 mt-2 rounded-xl bg-[#00a884] hover:bg-[#02906f] active:bg-[#008069] text-white font-semibold text-sm tracking-wide transition-all shadow-md shadow-[#00a884]/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full h-12 mt-2 rounded-xl bg-[#075e54] hover:bg-[#064e45] active:bg-[#053e37] dark:bg-[#008069] dark:hover:bg-[#00a884] dark:active:bg-[#075e54] text-white font-semibold text-sm tracking-wide transition-all shadow-md shadow-[#075e54]/25 dark:shadow-[#008069]/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? <Spinner /> : "Send Verification Code"}
             </button>
@@ -646,7 +659,7 @@ const Login = () => {
                     value={digit}
                     onChange={(e) => handleOtpChange(idx, e.target.value)}
                     onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                    className="w-11 h-14 text-center text-xl font-bold rounded-xl border border-[#d1d7db] dark:border-[#2a3942] bg-[#f8fafc] dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] focus:border-[#00a884] focus:ring-2 focus:ring-[#00a884]/20 focus:bg-white dark:focus:bg-[#111b21] outline-none transition-all"
+                    className="w-11 h-14 text-center text-xl font-bold rounded-xl border border-[#d1d7db] dark:border-[#2a3942] bg-[#f8fafc] dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] focus:border-[#075e54] dark:focus:border-[#008069] focus:ring-2 focus:ring-[#075e54]/20 dark:focus:ring-[#008069]/20 focus:bg-white dark:focus:bg-[#111b21] outline-none transition-all"
                   />
                 ))}
               </div>
@@ -655,7 +668,7 @@ const Login = () => {
             <button
               type="submit"
               disabled={loading || otp.join("").length !== 6}
-              className="w-full h-12 rounded-xl bg-[#00a884] hover:bg-[#02906f] active:bg-[#008069] text-white font-semibold text-sm tracking-wide transition-all shadow-md shadow-[#00a884]/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full h-12 rounded-xl bg-[#075e54] hover:bg-[#064e45] active:bg-[#053e37] dark:bg-[#008069] dark:hover:bg-[#00a884] dark:active:bg-[#075e54] text-white font-semibold text-sm tracking-wide transition-all shadow-md shadow-[#075e54]/25 dark:shadow-[#008069]/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? <Spinner /> : "Verify & Continue"}
             </button>
@@ -678,12 +691,12 @@ const Login = () => {
                 <img
                   src={profilePicPreview || selectedAvatar}
                   alt="Profile preview"
-                  className="w-full h-full rounded-full object-cover border-2 border-[#00a884] shadow-md bg-[#f0f2f5] dark:bg-[#202c33]"
+                  className="w-full h-full rounded-full object-cover border-2 border-[#075e54] dark:border-[#008069] shadow-md bg-[#f0f2f5] dark:bg-[#202c33]"
                 />
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[#00a884] hover:bg-[#02906f] text-white flex items-center justify-center shadow-md transition-transform hover:scale-105"
+                  className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[#075e54] hover:bg-[#064e45] dark:bg-[#008069] dark:hover:bg-[#00a884] text-white flex items-center justify-center shadow-md transition-transform hover:scale-105"
                 >
                   <FaCamera className="w-3.5 h-3.5" />
                 </button>
@@ -708,7 +721,7 @@ const Login = () => {
                     onClick={() => { setSelectedAvatar(av); setProfilePicPreview(null); setProfilePicFile(null); }}
                     className={`rounded-full transition-transform ${
                       selectedAvatar === av && !profilePicPreview
-                        ? "ring-2 ring-[#00a884] ring-offset-2 dark:ring-offset-[#111b21] scale-110"
+                        ? "ring-2 ring-[#075e54] dark:ring-[#008069] ring-offset-2 dark:ring-offset-[#111b21] scale-110"
                         : "opacity-70 hover:opacity-100 hover:scale-105"
                     }`}
                   >
@@ -741,18 +754,18 @@ const Login = () => {
                 type="checkbox"
                 checked={agreed}
                 onChange={(e) => setAgreed(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#00a884] focus:ring-[#00a884] cursor-pointer"
+                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#075e54] dark:text-[#008069] focus:ring-[#075e54] cursor-pointer"
               />
               <span className="text-xs text-[#54656f] dark:text-[#8696a0] leading-relaxed">
                 I agree to the WhatsApp clone{" "}
-                <span className="text-[#00a884] font-medium underline underline-offset-2">Terms & Privacy Policy</span>
+                <span className="text-[#075e54] dark:text-[#008069] font-medium underline underline-offset-2">Terms & Privacy Policy</span>
               </span>
             </label>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-12 rounded-xl bg-[#00a884] hover:bg-[#02906f] active:bg-[#008069] text-white font-semibold text-sm tracking-wide transition-all shadow-md shadow-[#00a884]/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full h-12 rounded-xl bg-[#075e54] hover:bg-[#064e45] active:bg-[#053e37] dark:bg-[#008069] dark:hover:bg-[#00a884] dark:active:bg-[#075e54] text-white font-semibold text-sm tracking-wide transition-all shadow-md shadow-[#075e54]/25 dark:shadow-[#008069]/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? <Spinner /> : "Start Chatting 🎉"}
             </button>
@@ -761,7 +774,7 @@ const Login = () => {
 
         {/* Footer badge */}
         <div className="mt-6 pt-4 border-t border-gray-100 dark:border-[#222e35] flex items-center justify-center gap-2 text-[#8696a0] text-[11px]">
-          <FaShieldAlt className="w-3 h-3 text-[#00a884]" />
+          <FaShieldAlt className="w-3 h-3 text-[#075e54] dark:text-[#008069]" />
           <span>End-to-end encrypted login authentication</span>
         </div>
       </motion.div>

@@ -13,12 +13,14 @@ import {
 import { MdOutlineChat } from "react-icons/md";
 import useUserStore from "../store/useUserStore";
 import useLayoutStore from "../store/useLayoutStore";
+import useChatStore from "../store/useChatStore";
 import { getAllUsers } from "../services/userService";
 import { getAvatarUrl } from "../utils/avatarUtil";
 
 const ChatList = () => {
   const { user: currentUser } = useUserStore();
   const { selectedContact, setSelectedContact, setActiveTab } = useLayoutStore();
+  const { conversations, isUserOnline } = useChatStore();
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -44,11 +46,17 @@ const ChatList = () => {
   }, []);
 
   const filteredUsers = users.filter((u) => {
-    const nameMatch = u.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const conv = conversations.find((c) =>
+      c.participants?.some((p) => (p._id || p)?.toString() === u._id?.toString())
+    );
+    const unread = conv?.unreadCount ?? u.unreadCount ?? 0;
+
+    const nameMatch =
+      u.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       u.phoneNumber?.includes(searchQuery);
 
     if (filterType === "unread") {
-      return nameMatch && u.unreadCount > 0;
+      return nameMatch && unread > 0;
     }
     return nameMatch;
   });
@@ -191,7 +199,12 @@ const ChatList = () => {
         ) : (
           filteredUsers.map((userItem) => {
             const isSelected = selectedContact?._id === userItem._id;
-            const lastMsg = userItem.conversation?.lastMessage;
+            const conv = conversations.find((c) =>
+              c.participants?.some((p) => (p._id || p)?.toString() === userItem._id?.toString())
+            );
+            const lastMsg = conv?.lastMessage || userItem.conversation?.lastMessage;
+            const unread = conv?.unreadCount ?? userItem.unreadCount ?? 0;
+            const isOnline = isUserOnline(userItem._id) || userItem.isOnline;
 
             return (
               <div
@@ -213,7 +226,7 @@ const ChatList = () => {
                     }}
                     className="w-12 h-12 rounded-full object-cover bg-gray-200 dark:bg-gray-700"
                   />
-                  {userItem.isOnline && (
+                  {isOnline && (
                     <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#25d366] rounded-full border-2 border-white dark:border-[#111b21]" />
                   )}
                 </div>
@@ -232,9 +245,9 @@ const ChatList = () => {
                     <p className="truncate text-xs text-[#54656f] dark:text-[#8696a0]">
                       {lastMsg?.content || userItem.about || "Hey there! I am using WhatsApp."}
                     </p>
-                    {userItem.unreadCount > 0 && (
+                    {unread > 0 && (
                       <span className="ml-2 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-[#25d366] text-white text-[10px] font-bold rounded-full flex-shrink-0">
-                        {userItem.unreadCount}
+                        {unread}
                       </span>
                     )}
                   </div>

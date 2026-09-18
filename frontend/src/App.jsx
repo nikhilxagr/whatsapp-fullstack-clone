@@ -14,50 +14,31 @@ import { initializeSocket, disconnectSocket, getSocket } from "./services/chat.s
 
 function App() {
   const { user } = useUserStore();
-  const { addMessage, setOnlineStatus, setTyping, updateMessageStatus, fetchConversations } =
-    useChatStore();
+  const { setCurrentUser, fetchConversations, cleanUp } = useChatStore();
 
   useEffect(() => {
-    if (!user?._id) return;
+    if (!user?._id) {
+      cleanUp();
+      disconnectSocket();
+      return;
+    }
 
-    const socket = initializeSocket();
+    setCurrentUser(user);
+    initializeSocket();
     fetchConversations();
 
-    socket.on("receiveMessage", (message) => {
-      addMessage(message);
-    });
-
-    socket.on("userStatusChanged", ({ userId, isOnline }) => {
-      setOnlineStatus(userId, isOnline);
-    });
-
-    socket.on("typing start", ({ conversationId, senderId }) => {
-      setTyping(conversationId, senderId, true);
-    });
-
-    socket.on("typing stop", ({ conversationId, senderId }) => {
-      setTyping(conversationId, senderId, false);
-    });
-
-    socket.on("messageRead", ({ _id, messageStatus }) => {
-      updateMessageStatus(_id, messageStatus);
-    });
-
-    socket.on("userUpdated", () => {
-      fetchConversations();
-    });
+    const socket = getSocket();
+    if (socket) {
+      socket.on("userUpdated", () => {
+        fetchConversations();
+      });
+    }
 
     return () => {
       const s = getSocket();
       if (s) {
-        s.off("receiveMessage");
-        s.off("userStatusChanged");
-        s.off("typing start");
-        s.off("typing stop");
-        s.off("messageRead");
         s.off("userUpdated");
       }
-      disconnectSocket();
     };
   }, [user?._id]);
 

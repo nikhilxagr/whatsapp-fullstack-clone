@@ -38,8 +38,13 @@ const ChatWindow = () => {
     setSelectedConversation,
     sendMessage,
     conversations,
-    onlineUsers,
-    typingUsers,
+    deleteMessage,
+    addReaction,
+    startTyping,
+    stopTyping,
+    isUserOnline,
+    getUserLastSeen,
+    isUserTyping,
     fetchConversations,
   } = useChatStore();
 
@@ -49,6 +54,7 @@ const ChatWindow = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [typingTimeout, setTypingTimeout] = useState(null);
   const [sending, setSending] = useState(false);
+  const [activeReactionMsgId, setActiveReactionMsgId] = useState(null);
 
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -76,20 +82,13 @@ const ChatWindow = () => {
   const handleTyping = (e) => {
     setText(e.target.value);
 
-    const socket = getSocket();
-    if (!socket || !selectedConversation?._id || !selectedContact?._id) return;
+    if (!selectedConversation?._id || !selectedContact?._id) return;
 
-    socket.emit("typing start", {
-      conversationId: selectedConversation._id,
-      receiverId: selectedContact._id,
-    });
+    startTyping(selectedContact._id, selectedConversation._id);
 
     clearTimeout(typingTimeout);
     const t = setTimeout(() => {
-      socket.emit("typing stop", {
-        conversationId: selectedConversation._id,
-        receiverId: selectedContact._id,
-      });
+      stopTyping(selectedContact._id, selectedConversation._id);
     }, 1500);
     setTypingTimeout(t);
   };
@@ -139,9 +138,6 @@ const ChatWindow = () => {
   const handleDeleteMessage = async (messageId) => {
     try {
       await deleteMessage(messageId);
-      useChatStore.setState((state) => ({
-        messages: state.messages.filter((m) => m._id !== messageId),
-      }));
     } catch (err) {
       console.error("Delete failed:", err);
     }
@@ -168,11 +164,9 @@ const ChatWindow = () => {
     return groups;
   }, {});
 
-  const isContactOnline =
-    selectedContact?.isOnline || onlineUsers.has(selectedContact?._id);
-
-  const isContactTyping =
-    selectedConversation?._id && typingUsers[selectedConversation._id];
+  const isContactOnline = isUserOnline(selectedContact?._id) || selectedContact?.isOnline;
+  const lastSeenDate = getUserLastSeen(selectedContact?._id) || selectedContact?.lastSeen;
+  const isContactTyping = isUserTyping(selectedContact?._id, selectedConversation?._id);
 
   return (
     <div className="h-full flex flex-col">
@@ -206,8 +200,8 @@ const ChatWindow = () => {
                 ? "typing..."
                 : isContactOnline
                 ? "online"
-                : selectedContact?.lastSeen
-                ? `last seen ${formatTime(selectedContact.lastSeen)}`
+                : lastSeenDate
+                ? `last seen ${formatTime(lastSeenDate)}`
                 : "offline"}
             </span>
           </div>
@@ -220,23 +214,20 @@ const ChatWindow = () => {
         </div>
       </div>
 
-      <div
-        className="flex-1 overflow-y-auto p-4 space-y-1"
-        style={{
-          backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2300a884' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
-        }}
-      >
-        <div className="mx-auto max-w-sm text-center py-2 px-4 bg-[#fffde7] dark:bg-[#182229]/90 backdrop-blur rounded-lg shadow-sm border border-yellow-100/60 dark:border-[#222e35] mb-4">
-          <p className="text-[11px] text-[#54656f] dark:text-[#8696a0] flex items-center justify-center gap-1.5 font-medium">
-            <FaLock className="w-2.5 h-2.5 text-[#00a884]" />
-            Messages are end-to-end encrypted
-          </p>
-        </div>
-
+      <div className="flex-1 overflow-y-auto px-4 sm:px-12 py-4 bg-[#efeae2] dark:bg-[#0b141a] space-y-1 relative select-text">
         {isLoadingMessages ? (
-          <div className="flex justify-center items-center py-12">
-            <div className="w-7 h-7 border-2 border-[#00a884] border-t-transparent rounded-full animate-spin" />
+          <div className="h-full flex flex-col items-center justify-center text-[#8696a0]">
+            <div className="w-8 h-8 border-2 border-[#00a884] border-t-transparent rounded-full animate-spin mb-3" />
+            <span className="text-xs">Loading messages...</span>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-[#8696a0] opacity-80 select-none">
+            <div className="p-4 bg-white/70 dark:bg-[#182229]/70 rounded-xl shadow-sm text-center max-w-sm">
+              <FaLock className="w-4 h-4 mx-auto mb-2 text-[#00a884]" />
+              <p className="text-xs">
+                Messages are end-to-end encrypted. No one outside of this chat can read them.
+              </p>
+            </div>
           </div>
         ) : (
           Object.entries(groupedMessages).map(([dateLabel, dayMessages]) => (
@@ -250,14 +241,15 @@ const ChatWindow = () => {
               {dayMessages.map((msg) => {
                 const isMine =
                   (msg.sender?._id || msg.sender) === currentUser._id;
+                const showPicker = activeReactionMsgId === msg._id;
 
                 return (
                   <div
                     key={msg._id}
-                    className={`flex mb-1 group ${isMine ? "justify-end" : "justify-start"}`}
+                    className={`flex mb-2 group relative ${isMine ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`relative max-w-[72%] rounded-lg px-3 pt-2 pb-1.5 shadow-sm ${
+                      className={`relative max-w-[72%] rounded-lg px-3 pt-2 pb-2 shadow-sm ${
                         isMine
                           ? "bg-[#d9fdd3] dark:bg-[#005c4b] rounded-tr-none"
                           : "bg-white dark:bg-[#202c33] rounded-tl-none"
@@ -292,15 +284,42 @@ const ChatWindow = () => {
                         {isMine && <StatusTick status={msg.messageStatus} />}
                       </div>
 
-                      {isMine && (
-                        <button
-                          onClick={() => handleDeleteMessage(msg._id)}
-                          className="absolute -top-2 -left-2 w-6 h-6 rounded-full bg-white dark:bg-[#233138] shadow-md text-red-400 hover:text-red-500 items-center justify-center hidden group-hover:flex transition-all"
-                          title="Delete message"
-                        >
-                          <FaTrash className="w-2.5 h-2.5" />
-                        </button>
+                      {/* Display message reactions */}
+                      {msg.reactions && msg.reactions.length > 0 && (
+                        <div className="absolute -bottom-2.5 right-2 flex items-center gap-0.5 px-1.5 py-0.5 bg-white dark:bg-[#1f2c34] border border-gray-100 dark:border-[#2a3942] rounded-full shadow-sm text-xs select-none">
+                          {Array.from(new Set(msg.reactions.map((r) => r.emoji))).slice(0, 3).map((em, idx) => (
+                            <span key={idx}>{em}</span>
+                          ))}
+                          {msg.reactions.length > 1 && (
+                            <span className="text-[10px] text-[#8696a0] font-medium ml-0.5">
+                              {msg.reactions.length}
+                            </span>
+                          )}
+                        </div>
                       )}
+
+                      {/* Hover action toolbar: Emoji Reactions & Delete */}
+                      <div className="absolute -top-3.5 right-1 hidden group-hover:flex items-center gap-1 bg-white dark:bg-[#202c33] border border-gray-200 dark:border-[#2a3942] rounded-full px-1.5 py-0.5 shadow-md z-20">
+                        {["👍", "❤️", "😂", "😮", "😢", "🙏"].map((emoji) => (
+                          <button
+                            key={emoji}
+                            onClick={() => addReaction(msg._id, emoji)}
+                            className="text-xs hover:scale-125 transition-transform px-0.5"
+                            title={`React with ${emoji}`}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                        {isMine && (
+                          <button
+                            onClick={() => handleDeleteMessage(msg._id)}
+                            className="p-1 text-red-400 hover:text-red-600 transition-colors ml-0.5"
+                            title="Delete message"
+                          >
+                            <FaTrash className="w-2.5 h-2.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
