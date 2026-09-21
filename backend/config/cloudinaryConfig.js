@@ -58,13 +58,19 @@ const storage = multer.diskStorage({
   },
 });
 
-const uploadSingle = multer({ storage }).single("file");
+const uploadFields = multer({ storage }).fields([
+  { name: "media", maxCount: 1 },
+  { name: "file", maxCount: 1 },
+]);
 
 const multerMiddleware = (req, res, next) => {
-  uploadSingle(req, res, (err) => {
+  uploadFields(req, res, (err) => {
     if (err) {
       console.warn("Multer warning:", err.message);
       return next();
+    }
+    if (req.files) {
+      req.file = req.files.media?.[0] || req.files.file?.[0] || req.file;
     }
     next();
   });
