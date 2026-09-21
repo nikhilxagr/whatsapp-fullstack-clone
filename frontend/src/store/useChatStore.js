@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import * as chatApi from "../services/chat.api";
 import { getSocket } from "../services/chat.service";
+import axiosInstance from "../services/url.service";
 
 const useChatStore = create((set, get) => ({
   // 1. Zustand Store State Architecture
@@ -208,7 +209,14 @@ const useChatStore = create((set, get) => ({
 
   // UI Selection helper
   setSelectedConversation: (conv) => {
-    const convId = conv?._id || conv;
+    const convId = (conv?._id || conv)?.toString() || null;
+    const currentId = (get().currentConversation?._id || get().currentConversation)?.toString() || null;
+
+    if (convId && convId === currentId && get().messages.length > 0) {
+      set({ selectedConversation: conv });
+      return;
+    }
+
     set({ selectedConversation: conv, currentConversation: convId, messages: [] });
     if (convId) {
       get().fetchMessages(convId);
@@ -269,10 +277,10 @@ const useChatStore = create((set, get) => ({
   },
 
   markMessagesAsRead: async (conversationId) => {
-    const targetConvId = conversationId || get().currentConversation;
+    const targetConvId = (conversationId || get().currentConversation)?.toString();
     if (!targetConvId) return;
 
-    const { messages, currentUser } = get();
+    const { messages, currentUser, conversations } = get();
     const myId = currentUser?._id?.toString();
 
     const unreadMsgs = messages.filter(
@@ -281,35 +289,54 @@ const useChatStore = create((set, get) => ({
         m.messageStatus !== "read"
     );
 
+    const convList = Array.isArray(conversations) ? conversations : conversations?.data || [];
+    const targetConv = convList.find(
+      (c) => c._id?.toString() === targetConvId
+    );
+
+    // Skip state update if no unread messages and unreadCount is already 0
+    if (unreadMsgs.length === 0 && (!targetConv || targetConv.unreadCount === 0)) {
+      return;
+    }
+
     const messageIds = unreadMsgs.map((m) => m._id);
 
-    // Optimistically update local message status to read
-    set((state) => ({
-      messages: state.messages.map((m) =>
-        messageIds.includes(m._id) ? { ...m, messageStatus: "read" } : m
-      ),
-      conversations: state.conversations.map((c) =>
-        c._id?.toString() === targetConvId?.toString() ? { ...c, unreadCount: 0 } : c
-      ),
-    }));
+    set((state) => {
+      const currentList = Array.isArray(state.conversations) ? state.conversations : state.conversations?.data || [];
+      const updatedConversations = currentList.map((c) =>
+        c._id?.toString() === targetConvId ? { ...c, unreadCount: 0 } : c
+      );
+
+      return {
+        messages: messageIds.length > 0
+          ? state.messages.map((m) =>
+              messageIds.includes(m._id) ? { ...m, messageStatus: "read" } : m
+            )
+          : state.messages,
+        conversations: Array.isArray(state.conversations)
+          ? updatedConversations
+          : { ...state.conversations, data: updatedConversations },
+      };
+    });
 
     try {
-      await chatApi.markMessagesAsRead({
-        messageIds,
-        conversationId: targetConvId,
-      });
-
-      // Emit socket message_read event with sender info
-      const socket = getSocket();
-      if (socket) {
-        unreadMsgs.forEach((msg) => {
-          const senderId = (msg.sender?._id || msg.sender)?.toString();
-          socket.emit("message_read", {
-            messageId: msg._id,
-            conversationId: targetConvId,
-            senderId,
-          });
+      if (messageIds.length > 0) {
+        await chatApi.markMessagesAsRead({
+          messageIds,
+          conversationId: targetConvId,
         });
+
+        const socket = getSocket();
+        if (socket) {
+          unreadMsgs.forEach((msg) => {
+            const senderId = (msg.sender?._id || msg.sender)?.toString();
+            socket.emit("message_read", {
+              messageId: msg._id,
+              conversationId: targetConvId,
+              senderId,
+            });
+          });
+        }
       }
     } catch (err) {
       console.error("Failed to mark messages as read:", err);
@@ -417,32 +444,119 @@ const useChatStore = create((set, get) => ({
     });
   },
 
-  // Backward compatibility methods
-  sendMessage: async ({ senderId, receiverId, content, file }) => {
+  // sendMessage implementation
+  sendMessage: async (formData) => {
+    // 1. Extract values from FormData or object for optimistic state generation
+    const isFormData = typeof FormData !== "undefined" && formData instanceof FormData;
+    const senderId = isFormData ? formData.get("senderId") : formData?.senderId;
+    const receiverId = isFormData ? formData.get("receiverId") : formData?.receiverId;
+    const media = isFormData
+      ? (formData.get("media") || formData.get("file"))
+      : (formData?.media || formData?.file);
+    const content = isFormData ? formData.get("content") : formData?.content;
+    const messageStatus = isFormData ? formData.get("messageStatus") : formData?.messageStatus;
+    const socket = getSocket();
+    const { conversations } = get();
+
+    // 2. Resolve or find matching conversation ID
+    let conversationId = null;
+    const convList = Array.isArray(conversations) ? conversations : conversations?.data || [];
+    if (convList.length > 0) {
+      const matchedConv = convList.find(
+        (conv) =>
+          conv.participants?.some((p) => (p._id || p)?.toString() === senderId?.toString()) &&
+          conv.participants?.some((p) => (p._id || p)?.toString() === receiverId?.toString())
+      );
+      if (matchedConv) {
+        conversationId = matchedConv._id;
+        set({ currentConversation: conversationId });
+      }
+    }
+
+    // 3. Create Optimistic Message with a temporary ID
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMessage = {
+      _id: tempId,
+      tempId,
+      sender: { _id: senderId },
+      receiver: { _id: receiverId },
+      conversation: conversationId,
+      imageOrVideoUrl:
+        media && typeof media !== "string"
+          ? URL.createObjectURL(media)
+          : typeof media === "string"
+          ? media
+          : null,
+      content: content || null,
+      contentType: media ? (media.type?.startsWith("video") ? "video" : "image") : "text",
+      createdAt: new Date().toISOString(),
+      messageStatus: messageStatus || "sent",
+      reactions: [],
+    };
+
+    // 4. Immediately append temporary message to state (instant feedback in UI)
+    set((state) => ({
+      messages: [...state.messages, optimisticMessage],
+    }));
+
     try {
-      let payload;
-      if (file) {
-        payload = new FormData();
-        payload.append("senderId", senderId);
-        payload.append("receiverId", receiverId);
-        if (content) payload.append("content", content);
-        payload.append("file", file);
+      // 5. REST API Call to store message in DB and upload file to Cloudinary
+      let payload = formData;
+      if (!isFormData) {
+        if (media) {
+          payload = new FormData();
+          payload.append("senderId", senderId);
+          payload.append("receiverId", receiverId);
+          if (content) payload.append("content", content);
+          payload.append("media", media);
+          payload.append("file", media);
+          if (messageStatus) payload.append("messageStatus", messageStatus);
+        } else {
+          payload = { senderId, receiverId, content, messageStatus };
+        }
       } else {
-        payload = { senderId, receiverId, content };
+        if (formData.has("media") && !formData.has("file")) {
+          formData.append("file", formData.get("media"));
+        }
+        if (formData.has("file") && !formData.has("media")) {
+          formData.append("media", formData.get("file"));
+        }
       }
 
-      const data = await chatApi.sendMessage(payload);
-      const savedMessage = data?.data || data?.message;
+      const response = await axiosInstance.post("/chats/send-message", payload, {
+        headers:
+          isFormData || payload instanceof FormData
+            ? { "Content-Type": "multipart/form-data" }
+            : undefined,
+      });
+      const realMessageData =
+        response.data?.data || response.data?.message || response.data;
 
-      if (savedMessage) {
-        get().receiveMessage(savedMessage);
-        getSocket()?.emit("sendMessage", savedMessage);
+      // 6. Replace optimistic message with the permanent response from MongoDB
+      set((state) => ({
+        messages: state.messages.map((msg) =>
+          msg._id === tempId ? realMessageData : msg
+        ),
+      }));
+
+      if (socket && realMessageData) {
+        socket.emit("sendMessage", realMessageData);
       }
 
-      return savedMessage;
-    } catch (err) {
-      console.error("Failed to send message:", err);
-      throw err;
+      // Update conversation lastMessage in sidebar
+      get().receiveMessage(realMessageData);
+
+      return realMessageData;
+    } catch (error) {
+      console.error("Error sending message:", error);
+      // 7. Rollback / Mark message as failed in UI if network request fails
+      set((state) => ({
+        messages: state.messages.map((msg) =>
+          msg._id === tempId ? { ...msg, messageStatus: "failed" } : msg
+        ),
+        error: error.response?.data?.message || error.message,
+      }));
+      throw error;
     }
   },
 
