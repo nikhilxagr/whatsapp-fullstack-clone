@@ -1,11 +1,13 @@
 import React, { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Layout from "./Layout";
 import ChatList from "./ChatList";
 import useLayoutStore from "../store/useLayoutStore";
 import useUserStore from "../store/useUserStore";
 import useThemeStore from "../store/useThemeStore";
 import { getAvatarUrl } from "../utils/avatarUtil";
-import { updateUserProfile } from "../services/userService";
+import { updateUserProfile, logoutUser } from "../services/userService";
+import { disconnectSocket } from "../services/chat.service";
 import { toast } from "react-toastify";
 import {
   FaArrowLeft,
@@ -23,12 +25,32 @@ import {
   FaCircleNotch,
   FaPhoneAlt,
   FaEnvelope,
+  FaSignOutAlt,
 } from "react-icons/fa";
 
 const HomePage = () => {
+  const navigate = useNavigate();
   const { activeTab, setActiveTab } = useLayoutStore();
-  const { user, setUser } = useUserStore();
+  const { user, setUser, clearUser } = useUserStore();
   const { theme, toggleTheme } = useThemeStore();
+
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  /* Logout: call API → disconnect socket → clear stores → redirect */
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await logoutUser();
+    } catch (err) {
+      console.error("Logout API error:", err);
+    } finally {
+      disconnectSocket();
+      clearUser();
+      toast.success("Logged out successfully");
+      navigate("/user-login", { replace: true });
+    }
+  };
 
   const [uploading, setUploading] = useState(false);
   const [removingPhoto, setRemovingPhoto] = useState(false);
@@ -307,6 +329,22 @@ const HomePage = () => {
                   <span className="text-xs text-[#8696a0]">FAQ, contact us</span>
                 </div>
               </div>
+            </div>
+
+            {/* Logout Button */}
+            <div className="px-4 py-4 border-t border-[#e9edef] dark:border-[#222e35]">
+              <button
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="w-full flex items-center gap-4 px-5 py-3.5 rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors font-medium text-sm disabled:opacity-60"
+              >
+                {loggingOut ? (
+                  <FaCircleNotch className="w-5 h-5 animate-spin" />
+                ) : (
+                  <FaSignOutAlt className="w-5 h-5" />
+                )}
+                <span>{loggingOut ? "Logging out..." : "Log out"}</span>
+              </button>
             </div>
           </div>
         </div>

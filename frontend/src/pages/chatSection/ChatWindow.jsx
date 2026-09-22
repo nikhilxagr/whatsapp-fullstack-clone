@@ -74,7 +74,7 @@ const ChatWindow = () => {
     addReaction,
   } = useChatStore();
 
-  // Local States [1:09:50 - 1:13:28]
+  // Local States 
   const [message, setMessage] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showFileMenu, setShowFileMenu] = useState(false);
