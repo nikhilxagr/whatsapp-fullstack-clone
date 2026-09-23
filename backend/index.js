@@ -59,4 +59,4 @@ app.use("/api/status", statusRoute);
 
 server.listen(PORT, () => {
   console.log(`Server and Socket.io are running on port ${PORT}`);
-});
+});
