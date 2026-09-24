@@ -1,5 +1,6 @@
-﻿import { create } from "zustand";
+import { create } from "zustand";
 import { getSocket } from "../services/chat.service";
+import useUserStore from "./useUserStore";
 import { toast } from "react-toastify";
 
 /* ── STUN / TURN ICE configuration ────────────────────────────────── */
@@ -8,7 +9,26 @@ const ICE_CONFIG = {
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun3.l.google.com:19302" },
+    { urls: "stun:stun4.l.google.com:19302" },
+    { urls: "stun:stun.relay.metered.ca:80" },
+    {
+      urls: "turn:openrelay.metered.ca:80",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443?transport=tcp",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
   ],
+  iceCandidatePoolSize: 10,
 };
 
 /* ── Internal timer state (outside store to avoid serialisation issues) ─ */
@@ -71,19 +91,43 @@ const useCallStore = create((set, get) => ({
 
     /* Attach incoming remote media stream */
     pc.ontrack = (event) => {
-      const [remoteStream] = event.streams;
-      set({ remoteStream });
+      console.log("[WebRTC] ontrack received:", event.track.kind, event.streams);
+      let stream = event.streams && event.streams[0];
+      if (!stream) {
+        const currentRemoteStream = get().remoteStream;
+        if (currentRemoteStream) {
+          currentRemoteStream.addTrack(event.track);
+          stream = currentRemoteStream;
+        } else {
+          stream = new MediaStream([event.track]);
+        }
+      }
+      set({ remoteStream: stream, callState: "active" });
+      startDurationTimer(set);
     };
 
-    /* Auto-cleanup on connection failure */
-    pc.onconnectionstatechange = () => {
-      const state = pc.connectionState;
-      if (state === "connected") {
+    const handleConnected = () => {
+      if (get().callState !== "active") {
         set({ callState: "active" });
         startDurationTimer(set);
       }
-      if (["disconnected", "failed", "closed"].includes(state)) {
+    };
+
+    /* Auto-cleanup or activate on connection state changes */
+    pc.onconnectionstatechange = () => {
+      console.log("[WebRTC] connectionState:", pc.connectionState);
+      if (pc.connectionState === "connected") {
+        handleConnected();
+      }
+      if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
         get()._cleanup("ended");
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log("[WebRTC] iceConnectionState:", pc.iceConnectionState);
+      if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+        handleConnected();
       }
     };
 
@@ -112,15 +156,20 @@ const useCallStore = create((set, get) => ({
       const pc = get()._createPeerConnection();
       localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
 
-      const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: callType === "video" });
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: callType === "video",
+      });
       await pc.setLocalDescription(offer);
+
+      const currentUser = useUserStore.getState().user;
 
       set({
         callState: "calling",
         callType,
         callDuration: 0,
         remoteUserId: remoteUser._id,
-        remoteUserName: remoteUser.username,
+        remoteUserName: remoteUser.username || remoteUser.name,
         remoteUserAvatar: remoteUser.profilePicture,
         localStream,
         peerConnection: pc,
@@ -131,9 +180,9 @@ const useCallStore = create((set, get) => ({
         to: remoteUser._id,
         offer,
         callType,
-        from: socket.id,
-        callerName: remoteUser.username,
-        callerAvatar: remoteUser.profilePicture,
+        from: currentUser?._id,
+        callerName: currentUser?.username || "WhatsApp Contact",
+        callerAvatar: currentUser?.profilePicture || null,
       });
     } catch (err) {
       console.error("startCall error:", err);
@@ -225,35 +274,40 @@ const useCallStore = create((set, get) => ({
       callType: callType || "video",
       callDuration: 0,
       remoteUserId: from,
-      remoteUserName: callerName,
-      remoteUserAvatar: callerAvatar,
+      remoteUserName: callerName || "Incoming Call",
+      remoteUserAvatar: callerAvatar || null,
       pendingOffer: offer,
       pendingCandidates: [],
     });
   },
 
   onCallAnswered: async ({ answer }) => {
+    console.log("[WebRTC] onCallAnswered received");
     const { peerConnection, pendingCandidates } = get();
     if (!peerConnection) return;
     try {
-      if (peerConnection.signalingState !== "have-local-offer") return;
+      if (peerConnection.signalingState === "stable") {
+        console.log("[WebRTC] signalingState is already stable");
+        return;
+      }
       await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+      set({ callState: "connecting" });
+
       /* Drain queued ICE candidates received before answer */
       for (const candidate of pendingCandidates) {
         await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
       }
       set({ pendingCandidates: [] });
-      /* callState "active" will be set by onconnectionstatechange */
     } catch (err) {
       console.error("onCallAnswered error:", err);
     }
   },
 
   onRemoteIceCandidate: async ({ candidate }) => {
+    if (!candidate) return;
     const { peerConnection } = get();
-    if (!peerConnection || !candidate) return;
     try {
-      if (peerConnection.remoteDescription) {
+      if (peerConnection && peerConnection.remoteDescription && peerConnection.remoteDescription.type) {
         await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
       } else {
         set((s) => ({ pendingCandidates: [...s.pendingCandidates, candidate] }));
