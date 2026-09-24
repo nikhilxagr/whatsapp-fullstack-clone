@@ -1,4 +1,4 @@
-﻿const { Server } = require("socket.io");
+const { Server } = require("socket.io");
 const User = require("../models/User");
 const Message = require("../models/Message");
 
@@ -286,38 +286,52 @@ const initializeSocket = (server) => {
 
     // WebRTC Video / Audio Call Signaling
 
+    const getRecipientTarget = (to) => {
+      if (!to) return null;
+      const toStr = to.toString();
+      return onlineUsers.get(toStr) || toStr;
+    };
+
     socket.on("call:offer", ({ to, offer, callType, from, callerName, callerAvatar }) => {
-      const recipientSocketId = onlineUsers.get(to?.toString());
-      if (recipientSocketId) {
-        io.to(recipientSocketId).emit("call:incoming", { from, offer, callType, callerName, callerAvatar });
+      const target = getRecipientTarget(to);
+      console.log(`[Socket] call:offer from ${from} (${callerName}) to ${to} -> target: ${target}`);
+      if (target) {
+        io.to(target).emit("call:incoming", { from, offer, callType, callerName, callerAvatar });
+      } else {
+        console.warn(`[Socket] call:offer recipient not found for: ${to}`);
       }
     });
 
     socket.on("call:answer", ({ to, answer }) => {
-      const recipientSocketId = onlineUsers.get(to?.toString());
-      if (recipientSocketId) {
-        io.to(recipientSocketId).emit("call:answered", { answer });
+      const target = getRecipientTarget(to);
+      console.log(`[Socket] call:answer to ${to} -> target: ${target}`);
+      if (target) {
+        io.to(target).emit("call:answered", { answer });
+      } else {
+        console.warn(`[Socket] call:answer recipient not found for: ${to}`);
       }
     });
 
     socket.on("call:ice-candidate", ({ to, candidate }) => {
-      const recipientSocketId = onlineUsers.get(to?.toString());
-      if (recipientSocketId) {
-        io.to(recipientSocketId).emit("call:ice-candidate", { candidate });
+      const target = getRecipientTarget(to);
+      if (target) {
+        io.to(target).emit("call:ice-candidate", { candidate });
       }
     });
 
     socket.on("call:reject", ({ to }) => {
-      const recipientSocketId = onlineUsers.get(to?.toString());
-      if (recipientSocketId) {
-        io.to(recipientSocketId).emit("call:rejected");
+      const target = getRecipientTarget(to);
+      console.log(`[Socket] call:reject to ${to} -> target: ${target}`);
+      if (target) {
+        io.to(target).emit("call:rejected");
       }
     });
 
     socket.on("call:end", ({ to }) => {
-      const recipientSocketId = onlineUsers.get(to?.toString());
-      if (recipientSocketId) {
-        io.to(recipientSocketId).emit("call:ended");
+      const target = getRecipientTarget(to);
+      console.log(`[Socket] call:end to ${to} -> target: ${target}`);
+      if (target) {
+        io.to(target).emit("call:ended");
       }
     });
   });
