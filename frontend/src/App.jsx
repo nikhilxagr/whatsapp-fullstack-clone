@@ -35,11 +35,17 @@ function App() {
       socket.on("userUpdated", () => fetchConversations());
 
       /* WebRTC call signaling listeners */
-      socket.on("call:incoming",      onIncomingCall);
-      socket.on("call:answered",      onCallAnswered);
-      socket.on("call:ice-candidate", onRemoteIceCandidate);
-      socket.on("call:rejected",      onCallRejected);
-      socket.on("call:ended",         onCallEnded);
+      socket.off("call:incoming");
+      socket.off("call:answered");
+      socket.off("call:ice-candidate");
+      socket.off("call:rejected");
+      socket.off("call:ended");
+
+      socket.on("call:incoming",      (payload) => useCallStore.getState().onIncomingCall(payload));
+      socket.on("call:answered",      (payload) => useCallStore.getState().onCallAnswered(payload));
+      socket.on("call:ice-candidate", (payload) => useCallStore.getState().onRemoteIceCandidate(payload));
+      socket.on("call:rejected",      () => useCallStore.getState().onCallRejected());
+      socket.on("call:ended",         () => useCallStore.getState().onCallEnded());
     }
 
     return () => {
