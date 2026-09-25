@@ -13,9 +13,14 @@ const getServerUrl = () => {
 };
 
 export const initializeSocket = () => {
-  if (socket?.connected) return socket;
+  const currentUser = useUserStore.getState().user;
+  if (socket?.connected) {
+    if (currentUser?._id) {
+      socket.emit("userConnected", currentUser._id);
+    }
+    return socket;
+  }
 
-  const user = useUserStore.getState().user;
   const serverUrl = getServerUrl();
 
   socket = io(serverUrl, {
@@ -27,6 +32,7 @@ export const initializeSocket = () => {
 
   socket.on("connect", () => {
     console.log("Socket connected:", socket.id);
+    const user = useUserStore.getState().user;
     if (user?._id) {
       socket.emit("userConnected", user._id);
     }
