@@ -1,118 +1,249 @@
 ﻿import { create } from "zustand";
 import { getSocket } from "../services/chat.service";
+import { toast } from "react-toastify";
 
-const ICE_SERVERS = {
+/* ── STUN / TURN ICE configuration ────────────────────────────────── */
+const ICE_CONFIG = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun2.l.google.com:19302" },
   ],
 };
 
+/* ── Internal timer state (outside store to avoid serialisation issues) ─ */
+let _durationInterval = null;
+
+const startDurationTimer = (set) => {
+  stopDurationTimer();
+  _durationInterval = setInterval(() => {
+    set((s) => ({ callDuration: s.callDuration + 1 }));
+  }, 1000);
+};
+
+const stopDurationTimer = () => {
+  if (_durationInterval) {
+    clearInterval(_durationInterval);
+    _durationInterval = null;
+  }
+};
+
+/* ── Store ─────────────────────────────────────────────────────────── */
 const useCallStore = create((set, get) => ({
+  /* Call state machine:
+     "idle" | "calling" | "incoming" | "connecting" | "active" | "ended" */
   callState: "idle",
-  callType: null,
+  callType: null,       // "video" | "audio"
+  callDuration: 0,      // seconds since call became active
+
+  /* Remote peer info */
   remoteUserId: null,
   remoteUserName: null,
   remoteUserAvatar: null,
+
+  /* Media streams */
   localStream: null,
   remoteStream: null,
+
+  /* Media controls */
   isMuted: false,
   isCameraOff: false,
+  isSpeakerOff: false,
+
+  /* WebRTC internals */
   peerConnection: null,
   pendingOffer: null,
   pendingCandidates: [],
 
+  /* ── Private: create RTCPeerConnection ─────────────────────────── */
   _createPeerConnection: () => {
-    const pc = new RTCPeerConnection(ICE_SERVERS);
+    const pc = new RTCPeerConnection(ICE_CONFIG);
+
+    /* Forward ICE candidates to remote peer */
     pc.onicecandidate = ({ candidate }) => {
       if (!candidate) return;
-      const socket = getSocket();
       const { remoteUserId } = get();
+      const socket = getSocket();
       if (socket && remoteUserId) {
         socket.emit("call:ice-candidate", { to: remoteUserId, candidate });
       }
     };
+
+    /* Attach incoming remote media stream */
     pc.ontrack = (event) => {
       const [remoteStream] = event.streams;
       set({ remoteStream });
     };
+
+    /* Auto-cleanup on connection failure */
     pc.onconnectionstatechange = () => {
-      if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
-        get().endCall();
+      const state = pc.connectionState;
+      if (state === "connected") {
+        set({ callState: "active" });
+        startDurationTimer(set);
+      }
+      if (["disconnected", "failed", "closed"].includes(state)) {
+        get()._cleanup("ended");
       }
     };
+
     return pc;
   },
 
+  /* ── Caller: initiate an outgoing call ─────────────────────────── */
   startCall: async (remoteUser, callType = "video") => {
     const socket = getSocket();
-    if (!socket) return;
+    if (!socket) {
+      toast.error("Socket not connected. Try again.");
+      return;
+    }
+
+    /* Prevent double-calling */
+    if (get().callState !== "idle") return;
+
     try {
       const localStream = await navigator.mediaDevices.getUserMedia({
         audio: true,
-        video: callType === "video",
+        video: callType === "video"
+          ? { width: { ideal: 1280 }, height: { ideal: 720 } }
+          : false,
       });
+
       const pc = get()._createPeerConnection();
       localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
-      const offer = await pc.createOffer();
+
+      const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: callType === "video" });
       await pc.setLocalDescription(offer);
-      set({ callState: "calling", callType, remoteUserId: remoteUser._id, remoteUserName: remoteUser.username, remoteUserAvatar: remoteUser.profilePicture, localStream, peerConnection: pc });
-      socket.emit("call:offer", { to: remoteUser._id, offer, callType, from: socket.id, callerName: remoteUser.username, callerAvatar: remoteUser.profilePicture });
+
+      set({
+        callState: "calling",
+        callType,
+        callDuration: 0,
+        remoteUserId: remoteUser._id,
+        remoteUserName: remoteUser.username,
+        remoteUserAvatar: remoteUser.profilePicture,
+        localStream,
+        peerConnection: pc,
+        pendingCandidates: [],
+      });
+
+      socket.emit("call:offer", {
+        to: remoteUser._id,
+        offer,
+        callType,
+        from: socket.id,
+        callerName: remoteUser.username,
+        callerAvatar: remoteUser.profilePicture,
+      });
     } catch (err) {
       console.error("startCall error:", err);
-      get()._cleanup();
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        toast.error("Camera/microphone permission denied.");
+      } else if (err.name === "NotFoundError") {
+        toast.error("No camera or microphone found.");
+      } else {
+        toast.error("Failed to start call.");
+      }
+      get()._cleanup("idle");
     }
   },
 
+  /* ── Callee: accept the incoming call ──────────────────────────── */
   acceptCall: async () => {
     const socket = getSocket();
     const { pendingOffer, remoteUserId, callType, pendingCandidates } = get();
     if (!socket || !pendingOffer) return;
+
+    set({ callState: "connecting" });
+
     try {
-      const localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: callType === "video" });
+      const localStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: callType === "video"
+          ? { width: { ideal: 1280 }, height: { ideal: 720 } }
+          : false,
+      });
+
       const pc = get()._createPeerConnection();
       localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+
       await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer));
-      for (const c of pendingCandidates) {
-        await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+
+      /* Drain any queued ICE candidates */
+      for (const candidate of pendingCandidates) {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
       }
+
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      set({ callState: "active", localStream, peerConnection: pc, pendingCandidates: [] });
+
+      set({ localStream, peerConnection: pc, pendingCandidates: [] });
+
       socket.emit("call:answer", { to: remoteUserId, answer });
     } catch (err) {
       console.error("acceptCall error:", err);
-      get()._cleanup();
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        toast.error("Camera/microphone permission denied.");
+      } else {
+        toast.error("Failed to connect call.");
+      }
+      get()._cleanup("idle");
     }
   },
 
+  /* ── Callee: decline the incoming call ─────────────────────────── */
   rejectCall: () => {
     const socket = getSocket();
     const { remoteUserId } = get();
-    if (socket && remoteUserId) socket.emit("call:reject", { to: remoteUserId });
-    get()._cleanup();
+    if (socket && remoteUserId) {
+      socket.emit("call:reject", { to: remoteUserId });
+    }
+    get()._cleanup("idle");
   },
 
+  /* ── Either peer: end or cancel a call ─────────────────────────── */
   endCall: () => {
     const socket = getSocket();
     const { remoteUserId } = get();
-    if (socket && remoteUserId) socket.emit("call:end", { to: remoteUserId });
-    get()._cleanup();
+    if (socket && remoteUserId) {
+      socket.emit("call:end", { to: remoteUserId });
+    }
+    get()._cleanup("ended");
   },
 
+  /* ── Socket event handlers ─────────────────────────────────────── */
+
   onIncomingCall: ({ from, offer, callType, callerName, callerAvatar }) => {
-    set({ callState: "incoming", callType: callType || "video", remoteUserId: from, remoteUserName: callerName, remoteUserAvatar: callerAvatar, pendingOffer: offer, pendingCandidates: [] });
+    /* Ignore if already in a call */
+    if (get().callState !== "idle") {
+      const socket = getSocket();
+      if (socket) socket.emit("call:reject", { to: from });
+      return;
+    }
+    set({
+      callState: "incoming",
+      callType: callType || "video",
+      callDuration: 0,
+      remoteUserId: from,
+      remoteUserName: callerName,
+      remoteUserAvatar: callerAvatar,
+      pendingOffer: offer,
+      pendingCandidates: [],
+    });
   },
 
   onCallAnswered: async ({ answer }) => {
     const { peerConnection, pendingCandidates } = get();
     if (!peerConnection) return;
     try {
+      if (peerConnection.signalingState !== "have-local-offer") return;
       await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-      for (const c of pendingCandidates) {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+      /* Drain queued ICE candidates received before answer */
+      for (const candidate of pendingCandidates) {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
       }
-      set({ callState: "active", pendingCandidates: [] });
+      set({ pendingCandidates: [] });
+      /* callState "active" will be set by onconnectionstatechange */
     } catch (err) {
       console.error("onCallAnswered error:", err);
     }
@@ -120,16 +251,28 @@ const useCallStore = create((set, get) => ({
 
   onRemoteIceCandidate: async ({ candidate }) => {
     const { peerConnection } = get();
-    if (!peerConnection) return;
-    if (peerConnection.remoteDescription) {
-      await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
-    } else {
-      set((s) => ({ pendingCandidates: [...s.pendingCandidates, candidate] }));
+    if (!peerConnection || !candidate) return;
+    try {
+      if (peerConnection.remoteDescription) {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      } else {
+        set((s) => ({ pendingCandidates: [...s.pendingCandidates, candidate] }));
+      }
+    } catch (err) {
+      console.warn("ICE candidate error:", err.message);
     }
   },
 
-  onCallRejected: () => get()._cleanup(),
-  onCallEnded: () => get()._cleanup(),
+  onCallRejected: () => {
+    toast.info("Call was declined.");
+    get()._cleanup("idle");
+  },
+
+  onCallEnded: () => {
+    get()._cleanup("ended");
+  },
+
+  /* ── Media controls ────────────────────────────────────────────── */
 
   toggleMute: () => {
     const { localStream, isMuted } = get();
@@ -145,11 +288,37 @@ const useCallStore = create((set, get) => ({
     set({ isCameraOff: !isCameraOff });
   },
 
-  _cleanup: () => {
+  toggleSpeaker: () => {
+    set((s) => ({ isSpeakerOff: !s.isSpeakerOff }));
+  },
+
+  /* ── Internal cleanup ──────────────────────────────────────────── */
+  _cleanup: (nextState = "idle") => {
     const { localStream, peerConnection } = get();
+    stopDurationTimer();
     localStream?.getTracks().forEach((t) => t.stop());
     peerConnection?.close();
-    set({ callState: "idle", callType: null, remoteUserId: null, remoteUserName: null, remoteUserAvatar: null, localStream: null, remoteStream: null, isMuted: false, isCameraOff: false, peerConnection: null, pendingOffer: null, pendingCandidates: [] });
+    set({
+      callState: nextState,
+      callType: null,
+      callDuration: 0,
+      remoteUserId: null,
+      remoteUserName: null,
+      remoteUserAvatar: null,
+      localStream: null,
+      remoteStream: null,
+      isMuted: false,
+      isCameraOff: false,
+      isSpeakerOff: false,
+      peerConnection: null,
+      pendingOffer: null,
+      pendingCandidates: [],
+    });
+
+    /* After a brief "ended" flash, go back to idle */
+    if (nextState === "ended") {
+      setTimeout(() => set({ callState: "idle" }), 1500);
+    }
   },
 }));
 
