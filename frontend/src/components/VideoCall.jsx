@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   FaMicrophone, FaMicrophoneSlash,
   FaVideoSlash, FaPhoneSlash, FaPhone,
@@ -83,8 +83,15 @@ const VideoCall = () => {
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
       remoteVideoRef.current.srcObject = remoteStream;
+      remoteVideoRef.current.play().catch((e) => console.log("remote video play catch:", e));
     }
-  }, [remoteStream]);
+  }, [remoteStream, callState]);
+
+  useEffect(() => {
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.muted = isSpeakerOff;
+    }
+  }, [isSpeakerOff]);
 
   /* ── Auto-hide controls during active video call ── */
   const resetHideTimer = () => {
