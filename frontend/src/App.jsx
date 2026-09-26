@@ -5,16 +5,19 @@ import "react-toastify/dist/ReactToastify.css";
 
 import Login from "./pages/user-login/Login";
 import HomePage from "./components/HomePage";
+import VideoCall from "./components/VideoCall";
 import { ProtectedRoute, PublicRoute } from "./Protected";
 import "./App.css";
 
 import useUserStore from "./store/useUserStore";
 import useChatStore from "./store/useChatStore";
+import useCallStore from "./store/useCallStore";
 import { initializeSocket, disconnectSocket, getSocket } from "./services/chat.service";
 
 function App() {
   const { user } = useUserStore();
   const { setCurrentUser, fetchConversations, cleanUp } = useChatStore();
+  const { onIncomingCall, onCallAnswered, onRemoteIceCandidate, onCallRejected, onCallEnded } = useCallStore();
 
   useEffect(() => {
     if (!user?._id) {
@@ -29,15 +32,25 @@ function App() {
 
     const socket = getSocket();
     if (socket) {
-      socket.on("userUpdated", () => {
-        fetchConversations();
-      });
+      socket.on("userUpdated", () => fetchConversations());
+
+      /* WebRTC call signaling listeners */
+      socket.on("call:incoming",      onIncomingCall);
+      socket.on("call:answered",      onCallAnswered);
+      socket.on("call:ice-candidate", onRemoteIceCandidate);
+      socket.on("call:rejected",      onCallRejected);
+      socket.on("call:ended",         onCallEnded);
     }
 
     return () => {
       const s = getSocket();
       if (s) {
         s.off("userUpdated");
+        s.off("call:incoming");
+        s.off("call:answered");
+        s.off("call:ice-candidate");
+        s.off("call:rejected");
+        s.off("call:ended");
       }
     };
   }, [user?._id]);
@@ -45,6 +58,8 @@ function App() {
   return (
     <>
       <ToastContainer position="top-right" autoClose={3000} theme="colored" />
+      {/* Global video call overlay — shown over everything when a call is active */}
+      <VideoCall />
       <Router>
         <Routes>
           <Route element={<PublicRoute />}>

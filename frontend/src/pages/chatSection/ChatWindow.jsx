@@ -16,9 +16,11 @@ import {
   FaExclamationCircle,
   FaFileAlt,
 } from "react-icons/fa";
+import { MdCall, MdVideocam } from "react-icons/md";
 import useUserStore from "../../store/useUserStore";
 import useChatStore from "../../store/useChatStore";
 import useLayoutStore from "../../store/useLayoutStore";
+import useCallStore from "../../store/useCallStore";
 import { getAvatarUrl } from "../../utils/avatarUtil";
 
 // WhatsApp Delivery Status Ticks
@@ -73,6 +75,8 @@ const ChatWindow = () => {
     deleteMessage,
     addReaction,
   } = useChatStore();
+
+  const { startCall } = useCallStore();
 
   // Local States 
   const [message, setMessage] = useState("");
@@ -317,6 +321,22 @@ const ChatWindow = () => {
         </div>
 
         <div className="flex items-center gap-1 text-[#54656f] dark:text-[#aebac1]">
+          {/* Audio call button */}
+          <button
+            onClick={() => startCall(selectedContact, "audio")}
+            className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            title="Voice call"
+          >
+            <MdCall className="w-5 h-5" />
+          </button>
+          {/* Video call button */}
+          <button
+            onClick={() => startCall(selectedContact, "video")}
+            className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            title="Video call"
+          >
+            <MdVideocam className="w-5 h-5" />
+          </button>
           <button className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
             <FaEllipsisV className="w-4 h-4" />
           </button>
