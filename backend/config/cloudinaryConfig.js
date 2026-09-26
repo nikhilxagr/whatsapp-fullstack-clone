@@ -61,6 +61,7 @@ const storage = multer.diskStorage({
 const uploadFields = multer({ storage }).fields([
   { name: "media", maxCount: 1 },
   { name: "file", maxCount: 1 },
+  { name: "profilePicture", maxCount: 1 },
 ]);
 
 const multerMiddleware = (req, res, next) => {
@@ -70,7 +71,12 @@ const multerMiddleware = (req, res, next) => {
       return next();
     }
     if (req.files) {
-      req.file = req.files.media?.[0] || req.files.file?.[0] || req.file;
+      // Merge all uploaded fields into req.file for convenience
+      req.file =
+        req.files.profilePicture?.[0] ||
+        req.files.media?.[0] ||
+        req.files.file?.[0] ||
+        req.file;
     }
     next();
   });

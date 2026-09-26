@@ -1,4 +1,4 @@
-const { Server } = require("socket.io");
+﻿const { Server } = require("socket.io");
 const User = require("../models/User");
 const Message = require("../models/Message");
 
@@ -282,6 +282,43 @@ const initializeSocket = (server) => {
     socket.on("disconnect", async () => {
       console.log("A user disconnected:", socket.id);
       await handleDisconnect();
+    });
+
+    // WebRTC Video / Audio Call Signaling
+
+    socket.on("call:offer", ({ to, offer, callType, from, callerName, callerAvatar }) => {
+      const recipientSocketId = onlineUsers.get(to?.toString());
+      if (recipientSocketId) {
+        io.to(recipientSocketId).emit("call:incoming", { from, offer, callType, callerName, callerAvatar });
+      }
+    });
+
+    socket.on("call:answer", ({ to, answer }) => {
+      const recipientSocketId = onlineUsers.get(to?.toString());
+      if (recipientSocketId) {
+        io.to(recipientSocketId).emit("call:answered", { answer });
+      }
+    });
+
+    socket.on("call:ice-candidate", ({ to, candidate }) => {
+      const recipientSocketId = onlineUsers.get(to?.toString());
+      if (recipientSocketId) {
+        io.to(recipientSocketId).emit("call:ice-candidate", { candidate });
+      }
+    });
+
+    socket.on("call:reject", ({ to }) => {
+      const recipientSocketId = onlineUsers.get(to?.toString());
+      if (recipientSocketId) {
+        io.to(recipientSocketId).emit("call:rejected");
+      }
+    });
+
+    socket.on("call:end", ({ to }) => {
+      const recipientSocketId = onlineUsers.get(to?.toString());
+      if (recipientSocketId) {
+        io.to(recipientSocketId).emit("call:ended");
+      }
     });
   });
 
