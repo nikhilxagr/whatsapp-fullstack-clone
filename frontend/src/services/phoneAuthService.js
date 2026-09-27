@@ -1,7 +1,5 @@
 import { auth, RecaptchaVerifier, signInWithPhoneNumber } from "../config/firebase";
-import axios from "axios";
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+import axiosInstance from "./url.service";
 
 // Initialize invisible reCAPTCHA verifier
 export const setupRecaptcha = (containerId = "recaptcha-container") => {
@@ -70,11 +68,15 @@ export const verifyFirebasePhoneOtp = async (confirmationResult, otp, phoneSuffi
     const userCredential = await confirmationResult.confirm(otp);
     const idToken = await userCredential.user.getIdToken();
 
-    const response = await axios.post(
-      `${API_BASE_URL}/auth/verify-firebase-phone`,
-      { idToken, phoneSuffix },
-      { withCredentials: true }
+    const response = await axiosInstance.post(
+      "/auth/verify-firebase-phone",
+      { idToken, phoneSuffix }
     );
+
+    const token = response.data?.data?.token || response.data?.token;
+    if (token && typeof localStorage !== "undefined") {
+      localStorage.setItem("auth_token", token);
+    }
 
     return response.data;
   } catch (error) {

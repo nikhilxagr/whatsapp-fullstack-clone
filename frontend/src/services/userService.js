@@ -17,6 +17,10 @@ export const register = async ({ email, password, phoneNumber, phoneSuffix }) =>
 export const verifyEmail = async ({ email, otp }) => {
   try {
     const res = await axiosInstance.post("/auth/verify-email", { email, otp });
+    const token = res.data?.data?.token || res.data?.token;
+    if (token && typeof localStorage !== "undefined") {
+      localStorage.setItem("auth_token", token);
+    }
     return res.data;
   } catch (err) {
     throw err.response?.data || err.message;
@@ -26,6 +30,10 @@ export const verifyEmail = async ({ email, otp }) => {
 export const loginWithEmail = async ({ email, password }) => {
   try {
     const res = await axiosInstance.post("/auth/login/email", { email, password });
+    const token = res.data?.data?.token || res.data?.token;
+    if (token && typeof localStorage !== "undefined") {
+      localStorage.setItem("auth_token", token);
+    }
     return res.data;
   } catch (err) {
     throw err.response?.data || err.message;
@@ -35,6 +43,10 @@ export const loginWithEmail = async ({ email, password }) => {
 export const loginWithPhone = async ({ phoneNumber, phoneSuffix, password }) => {
   try {
     const res = await axiosInstance.post("/auth/login/phone", { phoneNumber, phoneSuffix, password });
+    const token = res.data?.data?.token || res.data?.token;
+    if (token && typeof localStorage !== "undefined") {
+      localStorage.setItem("auth_token", token);
+    }
     return res.data;
   } catch (err) {
     throw err.response?.data || err.message;
@@ -48,8 +60,14 @@ export const checkUserAuth = async () => {
       const user = res.data.data?.user || res.data.data;
       return { isAuthenticated: true, user };
     }
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem("auth_token");
+    }
     return { isAuthenticated: false, user: null };
   } catch {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem("auth_token");
+    }
     return { isAuthenticated: false, user: null };
   }
 };
@@ -71,8 +89,14 @@ export const updateUserProfile = async (data) => {
 export const logoutUser = async () => {
   try {
     const res = await axiosInstance.post("/auth/logout");
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem("auth_token");
+    }
     return res.data;
   } catch (err) {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem("auth_token");
+    }
     throw err.response?.data || err.message;
   }
 };

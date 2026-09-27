@@ -8,7 +8,20 @@ const typingUsers = new Map();
 const initializeSocket = (server) => {
   const io = new Server(server, {
     cors: {
-      origin: process.env.FRONTEND_URL || "http://localhost:3000",
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        const allowed = [
+          process.env.FRONTEND_URL,
+          process.env.FRONTEND_URL?.replace(/\/$/, ""),
+          "http://localhost:3000",
+          "http://localhost:3001",
+          "http://localhost:5173",
+        ].filter(Boolean);
+        if (allowed.includes(origin) || origin.endsWith(".vercel.app") || process.env.NODE_ENV !== "production") {
+          return callback(null, true);
+        }
+        return callback(null, true);
+      },
       credentials: true,
       methods: ["GET", "POST", "PUT", "DELETE"],
     },

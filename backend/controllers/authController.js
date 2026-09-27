@@ -8,10 +8,12 @@ const generateToken = require("../utils/generateToken");
 
 const issueToken = (res, userId) => {
   const token = generateToken(userId);
+  const isProduction = process.env.NODE_ENV === "production";
   res.cookie("auth_token", token, {
     httpOnly: true,
     maxAge: 1000 * 60 * 60 * 24 * 365,
-    sameSite: "lax",
+    sameSite: isProduction ? "none" : "lax",
+    secure: isProduction,
   });
   return token;
 };
@@ -222,7 +224,13 @@ const updateProfile = async (req, res) => {
 
 const logout = async (req, res) => {
   try {
-    res.cookie("auth_token", "", { httpOnly: true, expires: new Date(0), sameSite: "lax" });
+    const isProduction = process.env.NODE_ENV === "production";
+    res.cookie("auth_token", "", {
+      httpOnly: true,
+      expires: new Date(0),
+      sameSite: isProduction ? "none" : "lax",
+      secure: isProduction,
+    });
     return response(res, 200, "Logged out successfully");
   } catch (err) {
     return response(res, 500, "Logout failed", { error: err.message });

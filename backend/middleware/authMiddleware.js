@@ -3,7 +3,11 @@ const User = require("../models/User");
 const response = require("../utils/responseHandler");
 
 const authMiddleware = async (req, res, next) => {
-  const authToken = req.cookies?.auth_token;
+  let authToken = req.cookies?.auth_token;
+  if (!authToken && req.headers.authorization?.startsWith("Bearer ")) {
+    authToken = req.headers.authorization.split(" ")[1];
+  }
+
   if (!authToken) {
     return response(res, 401, "Unauthorized: No authentication token provided");
   }
