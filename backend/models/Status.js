@@ -17,6 +17,14 @@ const statusSchema = new mongoose.Schema({
         required: true , 
         default: 'text'
     },
+    caption:{
+        type: String,
+        default: ""
+    },
+    backgroundColor:{
+        type: String,
+        default: "#00a884"
+    },
     viewers:[{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',

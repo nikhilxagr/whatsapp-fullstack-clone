@@ -13,7 +13,7 @@ exports.createStatus = async (req, res) => {
       return response(res, 401, "Unauthorized: User ID missing");
     }
 
-    const { content, contentType } = req.body;
+    const { content, contentType, caption, backgroundColor } = req.body;
     const file = req.file;
 
     let finalContent = content;
@@ -41,6 +41,8 @@ exports.createStatus = async (req, res) => {
       user: userId,
       content: finalContent,
       contentType: finalContentType,
+      caption: caption || "",
+      backgroundColor: backgroundColor || "#00a884",
       viewers: [],
     });
 
