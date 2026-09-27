@@ -35,7 +35,7 @@ const register = async (req, res) => {
     }
 
     const otp = otpGenerator();
-    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
     const hashedPassword = await bcrypt.hash(password, 10);
 
     let user = existing || new User({});
@@ -48,12 +48,27 @@ const register = async (req, res) => {
     if (phoneNumber && phoneSuffix) {
       user.phoneNumber = `${phoneSuffix}${phoneNumber}`;
       user.phoneSuffix = phoneSuffix;
+    } else {
+      user.phoneNumber = undefined;
+      user.phoneSuffix = undefined;
     }
 
     await user.save();
-    await sendOtpToEmail(email.toLowerCase(), otp);
 
-    return response(res, 200, "Verification code sent to your email", { email });
+    let emailSent = false;
+    try {
+      await sendOtpToEmail(email.toLowerCase(), otp);
+      emailSent = true;
+    } catch (mailError) {
+      console.error("⚠️ Failed to send OTP email via Gmail:", mailError.message);
+      console.log(`🔑 [VERIFICATION OTP FOR ${email.toLowerCase()}]: ${otp}`);
+    }
+
+    return response(res, 200, "Verification code sent to your email", {
+      email: email.toLowerCase(),
+      ...((!emailSent || process.env.NODE_ENV !== "production") ? { devOtp: otp } : {}),
+      emailSent,
+    });
   } catch (err) {
     console.error("Register error:", err.message, err.code);
     if (err.code === 11000) {

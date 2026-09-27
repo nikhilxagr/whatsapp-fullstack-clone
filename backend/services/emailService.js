@@ -3,18 +3,24 @@ const dotenv = require("dotenv");
 dotenv.config();
 
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false, // TLS
   auth: {
     user: process.env.EMAIL,
-    pass: process.env.EMAIL_PASSWORD,
+    pass: process.env.EMAIL_PASSWORD ? process.env.EMAIL_PASSWORD.replace(/\s+/g, "") : "",
+  },
+  family: 4, // Force IPv4 (prevents ENETUNREACH error on Render)
+  tls: {
+    rejectUnauthorized: false,
   },
 });
 
 transporter.verify((error) => {
   if (error) {
-    console.log("Email service error:", error);
+    console.warn("⚠️ Email service notice:", error.message);
   } else {
-    console.log("Email Service is ready");
+    console.log("✅ Email service is ready via IPv4 SMTP");
   }
 });
 

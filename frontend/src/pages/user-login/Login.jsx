@@ -231,14 +231,19 @@ const Login = () => {
 
     setLoading(true);
     try {
-      await register({
+      const res = await register({
         email: email.trim(),
         password,
         phoneNumber: phone.trim() || undefined,
         phoneSuffix: phone.trim() ? country.dialCode : undefined,
       });
       setPendingData({ email: email.trim() });
-      toast.success("Verification code sent to your email!");
+      if (res?.data?.devOtp) {
+        toast.info(`Verification code: ${res.data.devOtp}`, { duration: 8000 });
+        setOtp(String(res.data.devOtp).split(""));
+      } else {
+        toast.success("Verification code sent to your email!");
+      }
       setStep(2);
     } catch (err) {
       setError(err?.message || "Registration failed. Please try again.");

@@ -77,7 +77,7 @@ export const updateUserProfile = async (data) => {
     const isFormData = typeof FormData !== "undefined" && data instanceof FormData;
     const res = await axiosInstance.put("/auth/update-profile", data, {
       headers: isFormData
-        ? { "Content-Type": "multipart/form-data" }
+        ? {}
         : { "Content-Type": "application/json" },
     });
     return res.data;
