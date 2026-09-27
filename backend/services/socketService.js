@@ -284,8 +284,7 @@ const initializeSocket = (server) => {
       await handleDisconnect();
     });
 
-    // WebRTC Video / Audio Call Signaling
-
+    // Call signaling
     const getRecipientTarget = (to) => {
       if (!to) return null;
       const toStr = to.toString();

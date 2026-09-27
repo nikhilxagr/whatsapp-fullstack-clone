@@ -77,7 +77,6 @@ const PhoneLogin = ({ onLoginSuccess }) => {
 
   return (
     <div className="max-w-md w-full mx-auto bg-white dark:bg-[#111b21] p-6 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800">
-      {/* Invisible reCAPTCHA container required by Firebase */}
       <div id="recaptcha-container"></div>
 
       <div className="text-center mb-6">

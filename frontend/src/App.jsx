@@ -6,12 +6,15 @@ import "react-toastify/dist/ReactToastify.css";
 import Login from "./pages/user-login/Login";
 import HomePage from "./components/HomePage";
 import VideoCall from "./components/VideoCall";
+import StatusViewer from "./components/status/StatusViewer";
+import StatusUploadModal from "./components/status/StatusUploadModal";
 import { ProtectedRoute, PublicRoute } from "./Protected";
 import "./App.css";
 
 import useUserStore from "./store/useUserStore";
 import useChatStore from "./store/useChatStore";
 import useCallStore from "./store/useCallStore";
+import useStatusStore from "./store/useStatusStore";
 import { initializeSocket, disconnectSocket, getSocket } from "./services/chat.service";
 
 function App() {
@@ -29,12 +32,12 @@ function App() {
     setCurrentUser(user);
     initializeSocket();
     fetchConversations();
+    useStatusStore.getState().fetchAllStatusData();
 
     const socket = getSocket();
     if (socket) {
       socket.on("userUpdated", () => fetchConversations());
 
-      /* WebRTC call signaling listeners */
       socket.off("call:incoming");
       socket.off("call:answered");
       socket.off("call:ice-candidate");
@@ -46,6 +49,14 @@ function App() {
       socket.on("call:ice-candidate", (payload) => useCallStore.getState().onRemoteIceCandidate(payload));
       socket.on("call:rejected",      () => useCallStore.getState().onCallRejected());
       socket.on("call:ended",         () => useCallStore.getState().onCallEnded());
+
+      socket.off("newStatus");
+      socket.off("statusViewed");
+      socket.off("statusDeleted");
+
+      socket.on("newStatus",     (payload) => useStatusStore.getState().onNewStatus(payload));
+      socket.on("statusViewed",  (payload) => useStatusStore.getState().onStatusViewed(payload));
+      socket.on("statusDeleted", (payload) => useStatusStore.getState().onStatusDeleted(payload));
     }
 
     return () => {
@@ -57,6 +68,9 @@ function App() {
         s.off("call:ice-candidate");
         s.off("call:rejected");
         s.off("call:ended");
+        s.off("newStatus");
+        s.off("statusViewed");
+        s.off("statusDeleted");
       }
     };
   }, [user?._id]);
@@ -64,8 +78,9 @@ function App() {
   return (
     <>
       <ToastContainer position="top-right" autoClose={3000} theme="colored" />
-      {/* Global video call overlay — shown over everything when a call is active */}
       <VideoCall />
+      <StatusViewer />
+      <StatusUploadModal />
       <Router>
         <Routes>
           <Route element={<PublicRoute />}>

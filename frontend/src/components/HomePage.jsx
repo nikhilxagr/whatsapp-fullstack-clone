@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "./Layout";
 import ChatList from "./ChatList";
+import StatusSection from "./status/StatusSection";
 import useLayoutStore from "../store/useLayoutStore";
 import useUserStore from "../store/useUserStore";
 import useThemeStore from "../store/useThemeStore";
@@ -36,7 +37,6 @@ const HomePage = () => {
 
   const [loggingOut, setLoggingOut] = useState(false);
 
-  /* Logout: call API → disconnect socket → clear stores → redirect */
   const handleLogout = async () => {
     if (loggingOut) return;
     setLoggingOut(true);
@@ -194,53 +194,7 @@ const HomePage = () => {
       {activeTab === "chats" && <ChatList />}
 
       {activeTab === "status" && (
-        <div className="flex flex-col h-full bg-white dark:bg-[#111b21] border-r border-[#e9edef] dark:border-[#222e35]">
-          <div className="h-16 px-4 bg-[#008069] dark:bg-[#202c33] text-white flex items-center gap-4 flex-shrink-0">
-            <button
-              onClick={() => setActiveTab("chats")}
-              className="p-1 rounded-full hover:bg-white/10"
-              title="Back to chats"
-            >
-              <FaArrowLeft className="w-4 h-4" />
-            </button>
-            <h1 className="text-base font-semibold">Status</h1>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <div className="flex items-center gap-3 cursor-pointer p-2 rounded-xl hover:bg-[#f0f2f5] dark:hover:bg-[#202c33] transition-colors">
-              <div className="relative">
-                <img
-                  src={getAvatarUrl(user, user?.username)}
-                  alt="My status"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = getAvatarUrl(null, user?.username);
-                  }}
-                  className="w-12 h-12 rounded-full object-cover"
-                />
-                <span className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-[#00a884] text-white flex items-center justify-center text-[10px] font-bold border-2 border-white dark:border-[#111b21]">
-                  <FaPlus className="w-2 h-2" />
-                </span>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-sm font-semibold text-[#111b21] dark:text-[#e9edef]">
-                  My status
-                </h3>
-                <p className="text-xs text-[#8696a0]">Click to add status update</p>
-              </div>
-            </div>
-
-            <div className="border-t border-[#e9edef] dark:border-[#222e35] pt-4">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[#008069] dark:text-[#00a884] px-2 block mb-3">
-                Recent updates
-              </span>
-              <div className="text-center py-10 text-[#8696a0]">
-                <FaCircleNotch className="w-8 h-8 mx-auto mb-2 opacity-40 animate-spin-slow" />
-                <p className="text-xs">No recent updates from your contacts</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <StatusSection onBack={() => setActiveTab("chats")} />
       )}
 
       {activeTab === "settings" && (
@@ -280,7 +234,6 @@ const HomePage = () => {
               </div>
             </div>
 
-            {/* Settings Options List */}
             <div className="py-2 divide-y divide-[#e9edef]/60 dark:divide-[#222e35]/60 text-sm">
               <button
                 onClick={toggleTheme}
@@ -331,7 +284,6 @@ const HomePage = () => {
               </div>
             </div>
 
-            {/* Logout Button */}
             <div className="px-4 py-4 border-t border-[#e9edef] dark:border-[#222e35]">
               <button
                 onClick={handleLogout}

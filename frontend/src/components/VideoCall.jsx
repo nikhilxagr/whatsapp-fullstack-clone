@@ -8,7 +8,6 @@ import { MdFlipCameraAndroid, MdVideocam } from "react-icons/md";
 import useCallStore from "../store/useCallStore";
 import { getAvatarUrl } from "../utils/avatarUtil";
 
-/* ── Duration formatter hh:mm:ss / mm:ss ──────────────────────────── */
 const formatDuration = (seconds) => {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -17,15 +16,8 @@ const formatDuration = (seconds) => {
   return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 };
 
-/* ── Animated ring pulse (around avatar when calling/incoming) ────── */
-const RingPulse = () => (
-  <span className="absolute inset-0 rounded-full animate-ping bg-white/20 pointer-events-none" />
-);
-
-/* ── Control Button ────────────────────────────────────────────────── */
 const CtrlBtn = ({ onClick, active, danger, icon, label, size = "md" }) => {
-  const base =
-    "flex flex-col items-center gap-1.5 group select-none cursor-pointer";
+  const base = "flex flex-col items-center gap-1.5 group select-none cursor-pointer";
   const btnSize = size === "lg" ? "w-16 h-16" : "w-13 h-13";
   const bg = danger
     ? "bg-red-500 hover:bg-red-600"
@@ -45,9 +37,6 @@ const CtrlBtn = ({ onClick, active, danger, icon, label, size = "md" }) => {
   );
 };
 
-/* ══════════════════════════════════════════════════════════════════════
-   VIDEO CALL MODAL
-   ══════════════════════════════════════════════════════════════════════ */
 const VideoCall = () => {
   const {
     callState,
@@ -68,12 +57,11 @@ const VideoCall = () => {
     toggleSpeaker,
   } = useCallStore();
 
-  const localVideoRef  = useRef(null);
+  const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const [showControls, setShowControls] = useState(true);
   const hideTimer = useRef(null);
 
-  /* ── Attach streams to video elements ── */
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
@@ -93,7 +81,6 @@ const VideoCall = () => {
     }
   }, [isSpeakerOff]);
 
-  /* ── Auto-hide controls during active video call ── */
   const resetHideTimer = () => {
     setShowControls(true);
     if (hideTimer.current) clearTimeout(hideTimer.current);
@@ -108,18 +95,17 @@ const VideoCall = () => {
     return () => hideTimer.current && clearTimeout(hideTimer.current);
   }, [callState]);
 
-  /* ── Nothing to render when idle ── */
   if (callState === "idle") return null;
 
-  const isVideo  = callType === "video";
+  const isVideo = callType === "video";
   const isActive = callState === "active";
 
   const statusText = {
-    calling:    "Calling...",
-    incoming:   "Incoming call",
+    calling: "Calling...",
+    incoming: "Incoming call",
     connecting: "Connecting...",
-    active:     formatDuration(callDuration),
-    ended:      "Call ended",
+    active: formatDuration(callDuration),
+    ended: "Call ended",
   }[callState] || "";
 
   const remoteAvatar = getAvatarUrl(
@@ -133,15 +119,10 @@ const VideoCall = () => {
       onMouseMove={resetHideTimer}
       onTouchStart={resetHideTimer}
     >
-      {/* ── Backdrop ── */}
       <div className="absolute inset-0 bg-gradient-to-br from-[#0a1628] via-[#0d2137] to-[#091a14]" />
 
-      {/* ════════════════════════════════════════════
-          VIDEO CALL MODE
-          ════════════════════════════════════════════ */}
       {isVideo && (
         <>
-          {/* Remote full-screen video */}
           <video
             ref={remoteVideoRef}
             autoPlay
@@ -151,10 +132,8 @@ const VideoCall = () => {
             }`}
           />
 
-          {/* Subtle dark gradient over video for UI contrast */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30 pointer-events-none" />
 
-          {/* Local PiP */}
           <div className="absolute top-5 right-5 w-28 h-36 sm:w-36 sm:h-48 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/20 z-20 bg-[#111]">
             {isCameraOff ? (
               <div className="w-full h-full flex flex-col items-center justify-center bg-[#202c33] gap-2">
@@ -174,12 +153,8 @@ const VideoCall = () => {
         </>
       )}
 
-      {/* ════════════════════════════════════════════
-          AUDIO CALL / PRE-CONNECT STATE (avatar + rings)
-          ════════════════════════════════════════════ */}
       {(!isVideo || !isActive || !remoteStream) && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 gap-6 pointer-events-none">
-          {/* Pulsing avatar rings */}
           <div className="relative flex items-center justify-center">
             {(callState === "calling" || callState === "incoming") && (
               <>
@@ -204,7 +179,6 @@ const VideoCall = () => {
             />
           </div>
 
-          {/* Name + status */}
           <div className="text-center">
             <h2 className="text-white text-2xl font-semibold tracking-wide drop-shadow-lg">
               {remoteUserName}
@@ -212,7 +186,7 @@ const VideoCall = () => {
             <p
               className={`text-sm mt-1 font-medium drop-shadow ${
                 callState === "active" ? "text-[#25d366]" :
-                callState === "ended"  ? "text-red-400/80" :
+                callState === "ended" ? "text-red-400/80" :
                 "text-white/60 animate-pulse"
               }`}
             >
@@ -222,7 +196,6 @@ const VideoCall = () => {
         </div>
       )}
 
-      {/* Active video: top info bar */}
       {isVideo && isActive && (
         <div
           className={`absolute top-0 left-0 right-0 px-5 pt-4 pb-3 z-20 flex items-center gap-3 transition-opacity duration-500 ${
@@ -241,9 +214,6 @@ const VideoCall = () => {
         </div>
       )}
 
-      {/* ════════════════════════════════════════════
-          CONTROLS ZONE
-          ════════════════════════════════════════════ */}
       <div
         className={`absolute bottom-0 left-0 right-0 z-20 transition-all duration-500 ${
           isVideo && isActive && !showControls
@@ -251,14 +221,12 @@ const VideoCall = () => {
             : "opacity-100 translate-y-0"
         }`}
       >
-        {/* ─ INCOMING CALL BAR ─ */}
         {callState === "incoming" && (
           <div className="flex flex-col items-center gap-5 pb-14 pt-4">
             <p className="text-white/60 text-xs uppercase tracking-widest font-semibold">
-              {isVideo ? "📹  Video call" : "📞  Voice call"}
+              {isVideo ? "📹 Video call" : "📞 Voice call"}
             </p>
             <div className="flex items-center gap-12">
-              {/* Decline */}
               <div className="flex flex-col items-center gap-2">
                 <button
                   onClick={rejectCall}
@@ -269,7 +237,6 @@ const VideoCall = () => {
                 <span className="text-white/60 text-xs">Decline</span>
               </div>
 
-              {/* Accept */}
               <div className="flex flex-col items-center gap-2">
                 <button
                   onClick={acceptCall}
@@ -283,12 +250,9 @@ const VideoCall = () => {
           </div>
         )}
 
-        {/* ─ ACTIVE / CALLING CONTROLS ─ */}
         {(callState === "calling" || callState === "connecting" || isActive) && (
           <div className="flex flex-col items-end gap-4 pb-10 pt-4 px-6">
-            {/* Controls row */}
             <div className="w-full flex items-end justify-center gap-4 sm:gap-7">
-              {/* Mic */}
               <CtrlBtn
                 onClick={toggleMute}
                 active={isMuted}
@@ -296,7 +260,6 @@ const VideoCall = () => {
                 label={isMuted ? "Unmute" : "Mute"}
               />
 
-              {/* Camera (video only) */}
               {isVideo && (
                 <CtrlBtn
                   onClick={toggleCamera}
@@ -306,7 +269,6 @@ const VideoCall = () => {
                 />
               )}
 
-              {/* End call — prominent centre */}
               <div className="flex flex-col items-center gap-1.5">
                 <button
                   onClick={endCall}
@@ -318,7 +280,6 @@ const VideoCall = () => {
                 <span className="text-[10px] text-white/70 font-medium">End</span>
               </div>
 
-              {/* Speaker */}
               <CtrlBtn
                 onClick={toggleSpeaker}
                 active={isSpeakerOff}
@@ -326,7 +287,6 @@ const VideoCall = () => {
                 label={isSpeakerOff ? "Speaker off" : "Speaker"}
               />
 
-              {/* Flip camera placeholder (mobile feel) */}
               {isVideo && (
                 <CtrlBtn
                   onClick={() => {}}
@@ -338,7 +298,6 @@ const VideoCall = () => {
           </div>
         )}
 
-        {/* ─ CALL ENDED STATE ─ */}
         {callState === "ended" && (
           <div className="flex justify-center pb-14">
             <p className="text-red-400/80 text-sm font-medium animate-pulse">Call ended</p>

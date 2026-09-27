@@ -23,7 +23,6 @@ import useLayoutStore from "../../store/useLayoutStore";
 import useCallStore from "../../store/useCallStore";
 import { getAvatarUrl } from "../../utils/avatarUtil";
 
-// WhatsApp Delivery Status Ticks
 const StatusTick = ({ status }) => {
   if (status === "read") return <FaCheckDouble className="w-3 h-3 text-[#53bdeb]" title="Read" />;
   if (status === "delivered") return <FaCheckDouble className="w-3 h-3 text-[#8696a0]" title="Delivered" />;
@@ -31,7 +30,6 @@ const StatusTick = ({ status }) => {
   return <FaCheck className="w-3 h-3 text-[#8696a0]" title="Sent" />;
 };
 
-// Curated WhatsApp Emojis for the popup picker
 const EMOJI_CATEGORIES = {
   "Smileys & People": [
     "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇",
@@ -54,7 +52,6 @@ const EMOJI_CATEGORIES = {
 };
 
 const ChatWindow = () => {
-  // Global Store States
   const { user: currentUser } = useUserStore();
   const { selectedContact, clearSelectedContact } = useLayoutStore();
 
@@ -78,7 +75,6 @@ const ChatWindow = () => {
 
   const { startCall } = useCallStore();
 
-  // Local States 
   const [message, setMessage] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showFileMenu, setShowFileMenu] = useState(false);
@@ -88,7 +84,6 @@ const ChatWindow = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [sending, setSending] = useState(false);
 
-  // DOM & Timing Refs
   const typingTimeoutRef = useRef(null);
   const messageEndRef = useRef(null);
   const emojiPickerRef = useRef(null);
@@ -98,14 +93,13 @@ const ChatWindow = () => {
   const loadedContactIdRef = useRef(null);
   const loadedConvIdRef = useRef(null);
 
-  // Responsive mobile resize listener
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Fetching Messages on Contact Selection
+  // Sync selected conversation when contact changes
   useEffect(() => {
     if (!selectedContact?._id || !currentUser?._id) return;
 
@@ -136,12 +130,12 @@ const ChatWindow = () => {
     }
   }, [selectedContact?._id, conversations]);
 
-  // Auto-scroll to bottom of message feed
+  // Scroll to bottom on new message
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Typing Indicator Debounce Hook
+  // Typing debounce timer
   useEffect(() => {
     if (!selectedContact?._id) return;
 
@@ -167,7 +161,6 @@ const ChatWindow = () => {
     };
   }, [message, selectedContact?._id, selectedConversation?._id]);
 
-  // Outside click listener for emoji picker and file menu
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) {
@@ -182,7 +175,6 @@ const ChatWindow = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // File Selection Handler
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -198,7 +190,6 @@ const ChatWindow = () => {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // Message Dispatch Handler
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
     if ((!message.trim() && !selectedFile) || !selectedContact?._id || !currentUser?._id) return;
@@ -220,7 +211,6 @@ const ChatWindow = () => {
       formData.append("file", selectedFile);
     }
 
-    // Flush local inputs immediately
     setMessage("");
     clearFile();
     setShowEmojiPicker(false);
@@ -275,7 +265,6 @@ const ChatWindow = () => {
 
   return (
     <div className="h-full flex flex-col bg-[#efeae2] dark:bg-[#0b141a] transition-colors relative">
-      {/* 1. Header Bar */}
       <div className="h-16 px-4 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-[#e9edef] dark:border-[#222e35] flex items-center justify-between flex-shrink-0 z-20 select-none">
         <div className="flex items-center gap-3">
           {isMobile && (
@@ -321,7 +310,6 @@ const ChatWindow = () => {
         </div>
 
         <div className="flex items-center gap-1 text-[#54656f] dark:text-[#aebac1]">
-          {/* Audio call button */}
           <button
             onClick={() => startCall(selectedContact, "audio")}
             className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
@@ -329,7 +317,6 @@ const ChatWindow = () => {
           >
             <MdCall className="w-5 h-5" />
           </button>
-          {/* Video call button */}
           <button
             onClick={() => startCall(selectedContact, "video")}
             className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
@@ -343,7 +330,6 @@ const ChatWindow = () => {
         </div>
       </div>
 
-      {/* 2. Message Stream Feed */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-12 py-4 space-y-1 relative select-text">
         {isLoadingMessages ? (
           <div className="h-full flex flex-col items-center justify-center text-[#8696a0]">
@@ -383,7 +369,6 @@ const ChatWindow = () => {
                           : "bg-white dark:bg-[#202c33] rounded-tl-none"
                       }`}
                     >
-                      {/* Media Image / Video Attachment */}
                       {msg.imageOrVideoUrl && (
                         <div className="mb-1.5 overflow-hidden rounded-md">
                           {msg.contentType === "video" ? (
@@ -403,14 +388,12 @@ const ChatWindow = () => {
                         </div>
                       )}
 
-                      {/* Text content */}
                       {msg.content && (
                         <p className="text-[13.5px] leading-snug text-[#111b21] dark:text-[#e9edef] break-words whitespace-pre-wrap">
                           {msg.content}
                         </p>
                       )}
 
-                      {/* Timestamp and Status Ticks */}
                       <div className="flex items-center justify-end gap-1 mt-0.5 select-none">
                         <span className="text-[10px] text-[#8696a0]">
                           {formatTime(msg.createdAt)}
@@ -418,7 +401,6 @@ const ChatWindow = () => {
                         {isMine && <StatusTick status={msg.messageStatus} />}
                       </div>
 
-                      {/* Reactions Badges */}
                       {msg.reactions && msg.reactions.length > 0 && (
                         <div className="absolute -bottom-2.5 right-2 flex items-center gap-0.5 px-1.5 py-0.5 bg-white dark:bg-[#1f2c34] border border-gray-100 dark:border-[#2a3942] rounded-full shadow-sm text-xs select-none">
                           {Array.from(new Set(msg.reactions.map((r) => r.emoji))).slice(0, 3).map((em, idx) => (
@@ -432,7 +414,6 @@ const ChatWindow = () => {
                         </div>
                       )}
 
-                      {/* Hover Action Toolbar: Quick Reactions & Delete */}
                       <div className="absolute -top-3.5 right-1 hidden group-hover:flex items-center gap-1 bg-white dark:bg-[#202c33] border border-gray-200 dark:border-[#2a3942] rounded-full px-1.5 py-0.5 shadow-md z-10">
                         {["👍", "❤️", "😂", "😮", "😢", "🙏"].map((emoji) => (
                           <button
@@ -465,7 +446,6 @@ const ChatWindow = () => {
         <div ref={messageEndRef} />
       </div>
 
-      {/* 3. Media Preview Strip */}
       {filePreview && (
         <div className="px-4 py-2.5 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-[#e9edef] dark:border-[#222e35] flex items-center gap-3 z-20">
           <div className="relative">
@@ -496,13 +476,11 @@ const ChatWindow = () => {
         </div>
       )}
 
-      {/* 4. Emoji Picker Dropdown */}
       {showEmojiPicker && (
         <div
           ref={emojiPickerRef}
           className="absolute bottom-16 left-4 w-80 max-h-80 bg-white dark:bg-[#202c33] border border-gray-200 dark:border-[#2a3942] rounded-2xl shadow-2xl z-30 flex flex-col overflow-hidden"
         >
-          {/* Category Tabs */}
           <div className="flex border-b border-gray-100 dark:border-[#2a3942] p-1.5 gap-1 bg-gray-50 dark:bg-[#182229]">
             {Object.keys(EMOJI_CATEGORIES).map((cat) => (
               <button
@@ -520,7 +498,6 @@ const ChatWindow = () => {
             ))}
           </div>
 
-          {/* Emoji Grid */}
           <div className="flex-1 overflow-y-auto p-3 grid grid-cols-8 gap-2">
             {EMOJI_CATEGORIES[activeCategory].map((emoji, idx) => (
               <button
@@ -536,7 +513,6 @@ const ChatWindow = () => {
         </div>
       )}
 
-      {/* 5. Attachment Popup Menu */}
       {showFileMenu && (
         <div
           ref={fileMenuRef}
@@ -565,7 +541,6 @@ const ChatWindow = () => {
         </div>
       )}
 
-      {/* Hidden File Input */}
       <input
         ref={fileInputRef}
         type="file"
@@ -574,7 +549,6 @@ const ChatWindow = () => {
         className="hidden"
       />
 
-      {/* 6. Footer Input Bar */}
       <form
         onSubmit={handleSendMessage}
         className="min-h-[62px] px-3 py-2 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-[#e9edef] dark:border-[#222e35] flex items-center gap-2 flex-shrink-0 z-20"

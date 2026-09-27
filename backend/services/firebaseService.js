@@ -9,7 +9,7 @@ const initFirebase = () => {
   if (isInitialized || getApps().length > 0) return true;
 
   try {
-    // 1. Check if a service account json file path is provided in .env or default location
+    // Check service account json file
     let serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH
       ? path.resolve(process.cwd(), process.env.FIREBASE_SERVICE_ACCOUNT_PATH)
       : path.resolve(__dirname, "../config/firebase-service-account.json");
@@ -31,7 +31,7 @@ const initFirebase = () => {
       return true;
     }
 
-    // 2. Otherwise check individual environment variables
+    // Check environment variables
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
     let privateKey = process.env.FIREBASE_PRIVATE_KEY;
@@ -61,7 +61,7 @@ const initFirebase = () => {
   }
 };
 
-// Function to verify Firebase ID Token from client
+// Verify Firebase ID Token
 const verifyFirebaseToken = async (idToken) => {
   if (!isInitialized && !initFirebase()) {
     throw new Error(

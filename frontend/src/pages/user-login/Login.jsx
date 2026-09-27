@@ -371,13 +371,10 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-[#075e54] via-[#054c44] to-[#04332d] dark:from-[#052b24] dark:via-[#071f1b] dark:to-[#031512] transition-colors duration-300 selection:bg-[#00a884] selection:text-white relative overflow-hidden">
-      {/* WhatsApp Dark Green Top Banner */}
       <div className="absolute top-0 left-0 right-0 h-64 bg-gradient-to-r from-[#075e54] via-[#008069] to-[#054c44] dark:from-[#063b33] dark:via-[#075e54] dark:to-[#05322b] shadow-lg border-b border-black/10 dark:border-white/5 transition-colors" />
 
-      {/* Ambient radial lighting */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(0,168,132,0.18),transparent_65%)] pointer-events-none" />
 
-      {/* Subtle WhatsApp chat pattern overlay */}
       <div
         className="absolute inset-0 opacity-[0.035] dark:opacity-[0.04] pointer-events-none"
         style={{
@@ -387,7 +384,6 @@ const Login = () => {
         }}
       />
 
-      {/* Top bar */}
       <header className="relative z-10 w-full max-w-[440px] flex items-center justify-between px-1 mb-6">
         <div className="flex items-center gap-2.5 text-white">
           <FaWhatsapp className="w-8 h-8 drop-shadow-md text-[#25d366] sm:text-white" />
@@ -406,7 +402,6 @@ const Login = () => {
         </button>
       </header>
 
-      {/* Card */}
       <motion.div
         key={mode}
         initial={{ opacity: 0, y: 20 }}
@@ -414,7 +409,6 @@ const Login = () => {
         transition={{ duration: 0.3, ease: "easeOut" }}
         className="relative z-10 w-full max-w-[440px] bg-white dark:bg-[#111b21] border border-[#075e54]/15 dark:border-[#1e3d36] rounded-2xl shadow-[0_20px_50px_-10px_rgba(0,0,0,0.35)] dark:shadow-[0_25px_60px_rgba(0,0,0,0.7)] p-7 sm:p-9 transition-colors backdrop-blur-sm"
       >
-        {/* WhatsApp icon */}
         <div className="flex justify-center mb-5">
           <motion.div
             initial={{ scale: 0.8 }}
@@ -426,7 +420,6 @@ const Login = () => {
           </motion.div>
         </div>
 
-        {/* Mode tab toggle (only on step 1 of register or login screen) */}
         {(mode === "login" || (mode === "register" && step === 1)) && (
           <div className="flex rounded-xl overflow-hidden border border-[#075e54]/20 dark:border-[#2a3942] bg-[#f0f2f5] dark:bg-[#202c33]/70 p-1 mb-6">
             {["login", "register"].map((m) => (
@@ -446,7 +439,6 @@ const Login = () => {
           </div>
         )}
 
-        {/* Progress bar — register flow only */}
         {mode === "register" && (
           <div className="mb-5">
             <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[#075e54] dark:text-[#00a884] mb-1.5">
@@ -463,7 +455,6 @@ const Login = () => {
           </div>
         )}
 
-        {/* Heading */}
         <div className="text-center mb-5">
           <h1 className="text-xl font-bold tracking-tight text-[#111b21] dark:text-[#e9edef]">
             {mode === "login" && "Sign in to WhatsApp"}
@@ -481,7 +472,6 @@ const Login = () => {
           </p>
         </div>
 
-        {/* Error banner */}
         <AnimatePresence>
           {error && (
             <motion.div
@@ -500,7 +490,6 @@ const Login = () => {
 
         {mode === "login" && (
           <div>
-            {/* Login method toggle */}
             <div className="flex gap-2 mb-4">
               {["email", "phone"].map((m) => (
                 <button
@@ -577,7 +566,6 @@ const Login = () => {
 
         {mode === "register" && step === 1 && (
           <form onSubmit={handleRegisterSubmit} className="space-y-3">
-            {/* Email */}
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-[#54656f] dark:text-[#8696a0] mb-1.5">
                 Email <span className="text-[#075e54] dark:text-[#008069]">*</span>
@@ -596,7 +584,6 @@ const Login = () => {
               </InputWrap>
             </div>
 
-            {/* Password */}
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-[#54656f] dark:text-[#8696a0] mb-1.5">
                 Password <span className="text-[#075e54] dark:text-[#008069]">*</span>
@@ -604,7 +591,6 @@ const Login = () => {
               <PasswordInput id="reg-pass" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min. 6 characters" />
             </div>
 
-            {/* Confirm Password */}
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-[#54656f] dark:text-[#8696a0] mb-1.5">
                 Confirm Password <span className="text-[#075e54] dark:text-[#008069]">*</span>
@@ -612,7 +598,6 @@ const Login = () => {
               <PasswordInput id="reg-confirm" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Re-enter password" />
             </div>
 
-            {/* Optional phone */}
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-[#54656f] dark:text-[#8696a0] mb-1.5">
                 Phone Number <span className="font-normal text-[#8696a0] lowercase">(optional)</span>
@@ -685,7 +670,6 @@ const Login = () => {
 
         {mode === "register" && step === 3 && (
           <form onSubmit={handleProfileSetup} className="space-y-4">
-            {/* Avatar picker */}
             <div className="flex flex-col items-center">
               <div className="relative w-24 h-24 mb-3">
                 <img
@@ -731,7 +715,6 @@ const Login = () => {
               </div>
             </div>
 
-            {/* Username */}
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-[#54656f] dark:text-[#8696a0] mb-1.5">
                 Your Name
@@ -748,7 +731,6 @@ const Login = () => {
               </InputWrap>
             </div>
 
-            {/* Terms */}
             <label className="flex items-start gap-2.5 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -772,7 +754,6 @@ const Login = () => {
           </form>
         )}
 
-        {/* Footer badge */}
         <div className="mt-6 pt-4 border-t border-gray-100 dark:border-[#222e35] flex items-center justify-center gap-2 text-[#8696a0] text-[11px]">
           <FaShieldAlt className="w-3 h-3 text-[#075e54] dark:text-[#008069]" />
           <span>End-to-end encrypted login authentication</span>

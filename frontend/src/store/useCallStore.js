@@ -3,7 +3,6 @@ import { getSocket } from "../services/chat.service";
 import useUserStore from "./useUserStore";
 import { toast } from "react-toastify";
 
-/* ── STUN / TURN ICE configuration ────────────────────────────────── */
 const ICE_CONFIG = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
@@ -31,7 +30,6 @@ const ICE_CONFIG = {
   iceCandidatePoolSize: 10,
 };
 
-/* ── Internal timer state (outside store to avoid serialisation issues) ─ */
 let _durationInterval = null;
 
 const startDurationTimer = (set) => {
@@ -48,38 +46,29 @@ const stopDurationTimer = () => {
   }
 };
 
-/* ── Store ─────────────────────────────────────────────────────────── */
 const useCallStore = create((set, get) => ({
-  /* Call state machine:
-     "idle" | "calling" | "incoming" | "connecting" | "active" | "ended" */
   callState: "idle",
-  callType: null,       // "video" | "audio"
-  callDuration: 0,      // seconds since call became active
+  callType: null,
+  callDuration: 0,
 
-  /* Remote peer info */
   remoteUserId: null,
   remoteUserName: null,
   remoteUserAvatar: null,
 
-  /* Media streams */
   localStream: null,
   remoteStream: null,
 
-  /* Media controls */
   isMuted: false,
   isCameraOff: false,
   isSpeakerOff: false,
 
-  /* WebRTC internals */
   peerConnection: null,
   pendingOffer: null,
   pendingCandidates: [],
 
-  /* ── Private: create RTCPeerConnection ─────────────────────────── */
   _createPeerConnection: () => {
     const pc = new RTCPeerConnection(ICE_CONFIG);
 
-    /* Forward ICE candidates to remote peer */
     pc.onicecandidate = ({ candidate }) => {
       if (!candidate) return;
       const { remoteUserId } = get();
@@ -89,9 +78,7 @@ const useCallStore = create((set, get) => ({
       }
     };
 
-    /* Attach incoming remote media stream */
     pc.ontrack = (event) => {
-      console.log("[WebRTC] ontrack received:", event.track.kind, event.streams);
       let stream = event.streams && event.streams[0];
       if (!stream) {
         const currentRemoteStream = get().remoteStream;
@@ -113,9 +100,7 @@ const useCallStore = create((set, get) => ({
       }
     };
 
-    /* Auto-cleanup or activate on connection state changes */
     pc.onconnectionstatechange = () => {
-      console.log("[WebRTC] connectionState:", pc.connectionState);
       if (pc.connectionState === "connected") {
         handleConnected();
       }
@@ -125,7 +110,6 @@ const useCallStore = create((set, get) => ({
     };
 
     pc.oniceconnectionstatechange = () => {
-      console.log("[WebRTC] iceConnectionState:", pc.iceConnectionState);
       if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
         handleConnected();
       }
@@ -134,7 +118,6 @@ const useCallStore = create((set, get) => ({
     return pc;
   },
 
-  /* ── Caller: initiate an outgoing call ─────────────────────────── */
   startCall: async (remoteUser, callType = "video") => {
     const socket = getSocket();
     if (!socket) {
@@ -142,7 +125,6 @@ const useCallStore = create((set, get) => ({
       return;
     }
 
-    /* Prevent double-calling */
     if (get().callState !== "idle") return;
 
     try {
@@ -197,7 +179,6 @@ const useCallStore = create((set, get) => ({
     }
   },
 
-  /* ── Callee: accept the incoming call ──────────────────────────── */
   acceptCall: async () => {
     const socket = getSocket();
     const { pendingOffer, remoteUserId, callType, pendingCandidates } = get();
@@ -218,7 +199,7 @@ const useCallStore = create((set, get) => ({
 
       await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer));
 
-      /* Drain any queued ICE candidates */
+      // Add queued ICE candidates
       for (const candidate of pendingCandidates) {
         await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
       }
@@ -240,7 +221,6 @@ const useCallStore = create((set, get) => ({
     }
   },
 
-  /* ── Callee: decline the incoming call ─────────────────────────── */
   rejectCall: () => {
     const socket = getSocket();
     const { remoteUserId } = get();
@@ -250,7 +230,6 @@ const useCallStore = create((set, get) => ({
     get()._cleanup("idle");
   },
 
-  /* ── Either peer: end or cancel a call ─────────────────────────── */
   endCall: () => {
     const socket = getSocket();
     const { remoteUserId } = get();
@@ -260,10 +239,7 @@ const useCallStore = create((set, get) => ({
     get()._cleanup("ended");
   },
 
-  /* ── Socket event handlers ─────────────────────────────────────── */
-
   onIncomingCall: ({ from, offer, callType, callerName, callerAvatar }) => {
-    /* Ignore if already in a call */
     if (get().callState !== "idle") {
       const socket = getSocket();
       if (socket) socket.emit("call:reject", { to: from });
@@ -282,18 +258,13 @@ const useCallStore = create((set, get) => ({
   },
 
   onCallAnswered: async ({ answer }) => {
-    console.log("[WebRTC] onCallAnswered received");
     const { peerConnection, pendingCandidates } = get();
     if (!peerConnection) return;
     try {
-      if (peerConnection.signalingState === "stable") {
-        console.log("[WebRTC] signalingState is already stable");
-        return;
-      }
+      if (peerConnection.signalingState === "stable") return;
       await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
       set({ callState: "connecting" });
 
-      /* Drain queued ICE candidates received before answer */
       for (const candidate of pendingCandidates) {
         await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
       }
@@ -326,8 +297,6 @@ const useCallStore = create((set, get) => ({
     get()._cleanup("ended");
   },
 
-  /* ── Media controls ────────────────────────────────────────────── */
-
   toggleMute: () => {
     const { localStream, isMuted } = get();
     if (!localStream) return;
@@ -346,7 +315,6 @@ const useCallStore = create((set, get) => ({
     set((s) => ({ isSpeakerOff: !s.isSpeakerOff }));
   },
 
-  /* ── Internal cleanup ──────────────────────────────────────────── */
   _cleanup: (nextState = "idle") => {
     const { localStream, peerConnection } = get();
     stopDurationTimer();
@@ -369,7 +337,6 @@ const useCallStore = create((set, get) => ({
       pendingCandidates: [],
     });
 
-    /* After a brief "ended" flash, go back to idle */
     if (nextState === "ended") {
       setTimeout(() => set({ callState: "idle" }), 1500);
     }

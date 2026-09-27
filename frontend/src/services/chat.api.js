@@ -1,6 +1,6 @@
 import axiosInstance from "./url.service";
 
-// RESTful conversation endpoints matching tutorial spec
+// Conversation API endpoints
 export const getConversations = async () => {
   try {
     const res = await axiosInstance.get("/chats/conversations");

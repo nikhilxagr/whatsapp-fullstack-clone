@@ -3,10 +3,7 @@ import axios from "axios";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
-/**
- * Initialize or reuse an invisible reCAPTCHA verifier attached to a DOM container
- * @param {string} containerId - DOM ID of the container element (e.g. 'recaptcha-container')
- */
+// Initialize invisible reCAPTCHA verifier
 export const setupRecaptcha = (containerId = "recaptcha-container") => {
   if (typeof window === "undefined") return null;
 
@@ -16,7 +13,7 @@ export const setupRecaptcha = (containerId = "recaptcha-container") => {
     return null;
   }
 
-  // Clear previous verifier and wipe the container element to prevent "already rendered" errors
+  // Clear previous verifier to prevent already rendered errors
   if (window.recaptchaVerifier) {
     try {
       window.recaptchaVerifier.clear();
@@ -40,12 +37,7 @@ export const setupRecaptcha = (containerId = "recaptcha-container") => {
   return window.recaptchaVerifier;
 };
 
-/**
- * Send OTP to phone number using Firebase Auth
- * @param {string} fullPhoneNumber - Phone number with country code, e.g. "+919876543210"
- * @param {string} containerId - Element ID for reCAPTCHA
- * @returns {Promise<confirmationResult>}
- */
+// Send OTP to phone number using Firebase
 export const sendFirebasePhoneOtp = async (fullPhoneNumber, containerId = "recaptcha-container") => {
   try {
     const appVerifier = setupRecaptcha(containerId);
@@ -56,7 +48,6 @@ export const sendFirebasePhoneOtp = async (fullPhoneNumber, containerId = "recap
     return { success: true, confirmationResult };
   } catch (error) {
     console.error("Firebase send phone OTP error:", error);
-    // Reset reCAPTCHA on failure so user can try again immediately
     if (window.recaptchaVerifier) {
       try {
         window.recaptchaVerifier.clear();
@@ -69,25 +60,16 @@ export const sendFirebasePhoneOtp = async (fullPhoneNumber, containerId = "recap
   }
 };
 
-/**
- * Confirm OTP with Firebase and send verified token to Backend to log in
- * @param {Object} confirmationResult - Object returned from sendFirebasePhoneOtp
- * @param {string} otp - 6-digit OTP code entered by user
- * @param {string} phoneSuffix - Country code e.g. "+91"
- */
+// Verify OTP with Firebase and authenticate with backend
 export const verifyFirebasePhoneOtp = async (confirmationResult, otp, phoneSuffix = "") => {
   try {
     if (!confirmationResult) {
       throw new Error("No active OTP session. Please request an OTP first.");
     }
 
-    // 1. Verify code on Firebase
     const userCredential = await confirmationResult.confirm(otp);
-
-    // 2. Extract Firebase ID token
     const idToken = await userCredential.user.getIdToken();
 
-    // 3. Send token to backend to create/authenticate MongoDB user and get JWT cookie
     const response = await axios.post(
       `${API_BASE_URL}/auth/verify-firebase-phone`,
       { idToken, phoneSuffix },

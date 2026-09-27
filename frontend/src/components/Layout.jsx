@@ -231,37 +231,6 @@ const Layout = ({ children }) => {
         </nav>
       )}
 
-      <AnimatePresence>
-        {showStatusModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4"
-          >
-            <button
-              onClick={() => setShowStatusModal(false)}
-              className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white"
-            >
-              <FaTimes className="w-5 h-5" />
-            </button>
-
-            <div className="max-w-md w-full text-center text-white">
-              <img
-                src={
-                  statusPreviewData?.mediaUrl ||
-                  "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe"
-                }
-                alt="Status"
-                className="max-h-[75vh] w-auto mx-auto rounded-2xl object-contain mb-4 shadow-2xl"
-              />
-              <p className="text-sm font-medium">
-                {statusPreviewData?.caption || "Status update"}
-              </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };
