@@ -8,6 +8,7 @@ router.get("/conversations", authMiddleware, chatController.getConversations);
 router.get("/conversations/:conversationId/messages", authMiddleware, chatController.getMessages);
 router.put("/messages/read", authMiddleware, chatController.markMessagesAsRead);
 router.delete("/messages/:messageId", authMiddleware, chatController.deleteMessage);
+router.delete("/delete-conversation/:conversationId", authMiddleware, chatController.deleteConversation);
 
 router.post("/send-message", authMiddleware, multerMiddleware, chatController.sendMessage);
 router.get("/get-conversations", authMiddleware, chatController.getConversations);
@@ -18,4 +19,4 @@ router.delete("/delete-message/:messageId", authMiddleware, chatController.delet
 router.put("/update-message/:messageId", authMiddleware, multerMiddleware, chatController.updateMessage);
 router.delete("/delete-conversation/:conversationId", authMiddleware, chatController.deleteConversation);
 
-module.exports = router; 
+module.exports = router; 

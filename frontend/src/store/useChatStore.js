@@ -30,6 +30,7 @@ const useChatStore = create((set, get) => ({
     socket.off("reaction_update");
     socket.off("message_deleted");
     socket.off("message_error");
+    socket.off("conversationDeleted");
 
     socket.off("receiveMessage");
     socket.off("userStatusChanged");
@@ -86,6 +87,24 @@ const useChatStore = create((set, get) => ({
     };
     socket.on("message_deleted", handleMessageDeleted);
     socket.on("messageDeleted", handleMessageDeleted);
+
+    // Handle the other participant's side when a conversation is deleted
+    socket.on("conversationDeleted", ({ conversationId }) => {
+      if (!conversationId) return;
+      set((state) => ({
+        conversations: state.conversations.filter(
+          (c) => c._id?.toString() !== conversationId?.toString()
+        ),
+        messages:
+          (state.currentConversation?.toString() === conversationId?.toString())
+            ? []
+            : state.messages,
+        currentConversation:
+          (state.currentConversation?.toString() === conversationId?.toString())
+            ? null
+            : state.currentConversation,
+      }));
+    });
 
     const handleUserTyping = ({ userId, senderId, conversationId, isTyping }) => {
       const effectiveUserId = (userId || senderId)?.toString();
@@ -337,6 +356,36 @@ const useChatStore = create((set, get) => ({
       console.error("Failed to delete message:", err);
       const activeConvId = get().currentConversation;
       if (activeConvId) get().fetchMessages(activeConvId);
+    }
+  },
+
+  deleteConversation: async (conversationId) => {
+    if (!conversationId) return;
+    const convIdStr = conversationId?.toString();
+
+    // Optimistically remove from local state
+    set((state) => ({
+      conversations: state.conversations.filter(
+        (c) => c._id?.toString() !== convIdStr
+      ),
+      messages:
+        state.currentConversation?.toString() === convIdStr ? [] : state.messages,
+      currentConversation:
+        state.currentConversation?.toString() === convIdStr
+          ? null
+          : state.currentConversation,
+    }));
+
+    try {
+      await chatApi.deleteConversation(convIdStr);
+      const socket = getSocket();
+      if (socket) {
+        socket.emit("conversation_deleted", { conversationId: convIdStr });
+      }
+    } catch (err) {
+      console.error("Failed to delete conversation:", err);
+      // Refresh to restore if API fails
+      get().fetchConversations();
     }
   },
 

@@ -57,6 +57,11 @@ export const deleteMessage = async (messageId) => {
 };
 
 export const deleteConversation = async (conversationId) => {
-  const res = await axiosInstance.delete(`/chat/delete-conversation/${conversationId}`);
-  return res.data;
+  try {
+    const res = await axiosInstance.delete(`/chats/delete-conversation/${conversationId}`);
+    return res.data;
+  } catch {
+    const fallback = await axiosInstance.delete(`/chat/delete-conversation/${conversationId}`);
+    return fallback.data;
+  }
 };

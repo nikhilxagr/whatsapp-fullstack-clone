@@ -1,32 +1,136 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   FaSearch,
   FaEllipsisV,
   FaCircleNotch,
-  FaUserCircle,
-  FaCheck,
-  FaCheckDouble,
-  FaTimes,
   FaUsers,
-  FaPlus,
+  FaTimes,
+  FaTrashAlt,
 } from "react-icons/fa";
 import { MdOutlineChat } from "react-icons/md";
+import { AnimatePresence, motion } from "framer-motion";
+import { toast } from "react-toastify";
 import useUserStore from "../store/useUserStore";
 import useLayoutStore from "../store/useLayoutStore";
 import useChatStore from "../store/useChatStore";
 import { getAllUsers } from "../services/userService";
 import { getAvatarUrl } from "../utils/avatarUtil";
 
+// ── Confirmation dialog 
+const DeleteChatDialog = ({ contactName, onConfirm, onCancel }) => (
+  <AnimatePresence>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+      {/* Backdrop */}
+      <motion.div
+        className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onCancel}
+      />
+      {/* Card */}
+      <motion.div
+        className="relative w-full max-w-sm bg-white dark:bg-[#233138] rounded-2xl shadow-2xl p-6 flex flex-col gap-4"
+        initial={{ opacity: 0, scale: 0.92, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.92, y: 20 }}
+        transition={{ type: "spring", stiffness: 320, damping: 26 }}
+      >
+        {/* Icon */}
+        <div className="flex items-center justify-center w-14 h-14 mx-auto rounded-full bg-red-100 dark:bg-red-900/30">
+          <FaTrashAlt className="w-6 h-6 text-red-500" />
+        </div>
+
+        <div className="text-center">
+          <h3 className="text-base font-bold text-[#111b21] dark:text-[#e9edef]">
+            Delete chat with {contactName}?
+          </h3>
+          <p className="text-xs text-[#54656f] dark:text-[#8696a0] mt-1.5 leading-relaxed">
+            This will permanently delete the entire conversation for both you
+            and {contactName}. This action cannot be undone.
+          </p>
+        </div>
+
+        <div className="flex gap-3 mt-1">
+          <button
+            id="delete-chat-cancel-btn"
+            onClick={onCancel}
+            className="flex-1 h-10 rounded-xl bg-[#f0f2f5] dark:bg-[#2a3942] text-[#111b21] dark:text-[#e9edef] text-sm font-semibold hover:bg-[#e9edef] dark:hover:bg-[#374c56] transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            id="delete-chat-confirm-btn"
+            onClick={onConfirm}
+            className="flex-1 h-10 rounded-xl bg-red-500 hover:bg-red-600 active:bg-red-700 text-white text-sm font-semibold transition-colors shadow-md shadow-red-500/25"
+          >
+            Delete
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  </AnimatePresence>
+);
+
+// ── Context menu ────────────────────────────────────────────────────────────
+const ContextMenu = ({ x, y, onDelete, onClose }) => {
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) onClose();
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [onClose]);
+
+  // Keep menu within viewport
+  const safeX = Math.min(x, window.innerWidth - 180);
+  const safeY = Math.min(y, window.innerHeight - 80);
+
+  return (
+    <motion.div
+      ref={menuRef}
+      style={{ top: safeY, left: safeX }}
+      className="fixed z-[90] min-w-[168px] bg-white dark:bg-[#233138] rounded-xl shadow-xl border border-gray-100 dark:border-[#2a3942] py-1 overflow-hidden"
+      initial={{ opacity: 0, scale: 0.92, y: -4 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.92, y: -4 }}
+      transition={{ duration: 0.12 }}
+    >
+      <button
+        id="context-menu-delete-chat"
+        onClick={onDelete}
+        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-medium"
+      >
+        <FaTrashAlt className="w-3.5 h-3.5" />
+        Delete chat
+      </button>
+    </motion.div>
+  );
+};
+
+// ── Main Component ──────────────────────────────────────────────────────────
 const ChatList = () => {
   const { user: currentUser } = useUserStore();
   const { selectedContact, setSelectedContact, setActiveTab } = useLayoutStore();
-  const { conversations, isUserOnline } = useChatStore();
+  const { conversations, isUserOnline, deleteConversation } = useChatStore();
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState("all"); // 'all' | 'unread' | 'groups'
+  const [filterType, setFilterType] = useState("all"); // 'all' | 'unread'
   const [showMenu, setShowMenu] = useState(false);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState(null); // { x, y, userItem, conv }
+  // Confirm dialog state
+  const [confirmDelete, setConfirmDelete] = useState(null); // { userItem, conv }
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -41,7 +145,6 @@ const ChatList = () => {
         setLoading(false);
       }
     };
-
     fetchUsers();
   }, []);
 
@@ -50,14 +153,10 @@ const ChatList = () => {
       c.participants?.some((p) => (p._id || p)?.toString() === u._id?.toString())
     );
     const unread = conv?.unreadCount ?? u.unreadCount ?? 0;
-
     const nameMatch =
       u.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       u.phoneNumber?.includes(searchQuery);
-
-    if (filterType === "unread") {
-      return nameMatch && unread > 0;
-    }
+    if (filterType === "unread") return nameMatch && unread > 0;
     return nameMatch;
   });
 
@@ -67,197 +166,283 @@ const ChatList = () => {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
+  // Right-click / long-press handler
+  const handleContextMenu = useCallback((e, userItem, conv) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only show context menu if there is an existing conversation
+    if (!conv) return;
+    setContextMenu({ x: e.clientX, y: e.clientY, userItem, conv });
+  }, []);
+
+  // Long-press support (mobile)
+  const longPressRef = useRef(null);
+  const startLongPress = useCallback((e, userItem, conv) => {
+    if (!conv) return;
+    longPressRef.current = setTimeout(() => {
+      const touch = e.touches?.[0];
+      if (touch) {
+        setContextMenu({ x: touch.clientX, y: touch.clientY, userItem, conv });
+      }
+    }, 600);
+  }, []);
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressRef.current) {
+      clearTimeout(longPressRef.current);
+      longPressRef.current = null;
+    }
+  }, []);
+
+  const handleDeleteRequest = () => {
+    if (!contextMenu) return;
+    setConfirmDelete({ userItem: contextMenu.userItem, conv: contextMenu.conv });
+    setContextMenu(null);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!confirmDelete || deleting) return;
+    const { userItem, conv } = confirmDelete;
+    setDeleting(true);
+    try {
+      await deleteConversation(conv._id);
+      // If this was the selected contact, deselect it
+      if (selectedContact?._id === userItem._id) {
+        setSelectedContact(null);
+      }
+      toast.success(`Chat with ${userItem.username} deleted`);
+    } catch (err) {
+      toast.error("Failed to delete chat. Please try again.");
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(null);
+    }
+  };
+
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-[#111b21] border-r border-[#e9edef] dark:border-[#222e35] select-none transition-colors">
-      <div className="h-16 px-4 bg-[#f0f2f5] dark:bg-[#202c33] flex items-center justify-between border-b border-[#e9edef] dark:border-[#222e35] flex-shrink-0">
-        <div
-          onClick={() => setActiveTab("profile")}
-          className="flex items-center gap-3 cursor-pointer group"
-          title="View profile"
-        >
-          <img
-            src={getAvatarUrl(currentUser, currentUser?.username)}
-            alt="My Profile"
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = getAvatarUrl(null, currentUser?.username);
-            }}
-            className="w-10 h-10 rounded-full object-cover ring-2 ring-transparent group-hover:ring-[#00a884] transition-all"
-          />
-          <span className="text-sm font-semibold text-[#111b21] dark:text-[#e9edef] hidden sm:inline max-w-[120px] truncate">
-            {currentUser?.username || "You"}
-          </span>
+    <>
+      <div className="flex flex-col h-full bg-white dark:bg-[#111b21] border-r border-[#e9edef] dark:border-[#222e35] select-none transition-colors">
+        {/* Header */}
+        <div className="h-16 px-4 bg-[#f0f2f5] dark:bg-[#202c33] flex items-center justify-between border-b border-[#e9edef] dark:border-[#222e35] flex-shrink-0">
+          <div
+            onClick={() => setActiveTab("profile")}
+            className="flex items-center gap-3 cursor-pointer group"
+            title="View profile"
+          >
+            <img
+              src={getAvatarUrl(currentUser, currentUser?.username)}
+              alt="My Profile"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = getAvatarUrl(null, currentUser?.username);
+              }}
+              className="w-10 h-10 rounded-full object-cover ring-2 ring-transparent group-hover:ring-[#00a884] transition-all"
+            />
+            <span className="text-sm font-semibold text-[#111b21] dark:text-[#e9edef] hidden sm:inline max-w-[120px] truncate">
+              {currentUser?.username || "You"}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1 text-[#54656f] dark:text-[#aebac1]">
+            <button
+              onClick={() => setActiveTab("status")}
+              className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              title="Status"
+            >
+              <FaCircleNotch className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setActiveTab("chats")}
+              className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              title="New chat"
+            >
+              <MdOutlineChat className="w-5 h-5" />
+            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                title="Menu"
+              >
+                <FaEllipsisV className="w-4 h-4" />
+              </button>
+              {showMenu && (
+                <div
+                  className="absolute right-0 top-10 w-44 bg-white dark:bg-[#233138] rounded-lg shadow-xl border border-gray-100 dark:border-[#222e35] py-2 z-50 text-sm"
+                  onMouseLeave={() => setShowMenu(false)}
+                >
+                  <button
+                    onClick={() => { setActiveTab("profile"); setShowMenu(false); }}
+                    className="w-full text-left px-4 py-2 hover:bg-[#f0f2f5] dark:hover:bg-[#182229] text-[#111b21] dark:text-[#e9edef]"
+                  >
+                    Profile
+                  </button>
+                  <button
+                    onClick={() => { setActiveTab("settings"); setShowMenu(false); }}
+                    className="w-full text-left px-4 py-2 hover:bg-[#f0f2f5] dark:hover:bg-[#182229] text-[#111b21] dark:text-[#e9edef]"
+                  >
+                    Settings
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center gap-1 text-[#54656f] dark:text-[#aebac1]">
-          <button
-            onClick={() => setActiveTab("status")}
-            className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-            title="Status"
-          >
-            <FaCircleNotch className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setActiveTab("chats")}
-            className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-            title="New chat"
-          >
-            <MdOutlineChat className="w-5 h-5" />
-          </button>
-          <div className="relative">
-            <button
-              onClick={() => setShowMenu(!showMenu)}
-              className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-              title="Menu"
-            >
-              <FaEllipsisV className="w-4 h-4" />
-            </button>
-            {showMenu && (
-              <div
-                className="absolute right-0 top-10 w-44 bg-white dark:bg-[#233138] rounded-lg shadow-xl border border-gray-100 dark:border-[#222e35] py-2 z-50 text-sm"
-                onMouseLeave={() => setShowMenu(false)}
-              >
-                <button
-                  onClick={() => {
-                    setActiveTab("profile");
-                    setShowMenu(false);
-                  }}
-                  className="w-full text-left px-4 py-2 hover:bg-[#f0f2f5] dark:hover:bg-[#182229] text-[#111b21] dark:text-[#e9edef]"
-                >
-                  Profile
-                </button>
-                <button
-                  onClick={() => {
-                    setActiveTab("settings");
-                    setShowMenu(false);
-                  }}
-                  className="w-full text-left px-4 py-2 hover:bg-[#f0f2f5] dark:hover:bg-[#182229] text-[#111b21] dark:text-[#e9edef]"
-                >
-                  Settings
-                </button>
-              </div>
+        {/* Search + Filters */}
+        <div className="p-2.5 bg-white dark:bg-[#111b21] border-b border-[#e9edef] dark:border-[#222e35] flex flex-col gap-2 flex-shrink-0">
+          <div className="flex items-center h-9 px-3 bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg text-sm text-[#111b21] dark:text-[#e9edef]">
+            <FaSearch className="w-3.5 h-3.5 text-[#8696a0] mr-3 flex-shrink-0" />
+            <input
+              type="text"
+              placeholder="Search or start new chat"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-transparent outline-none text-xs placeholder-[#8696a0]"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery("")}>
+                <FaTimes className="w-3 h-3 text-[#8696a0] hover:text-gray-700 dark:hover:text-white" />
+              </button>
             )}
           </div>
-        </div>
-      </div>
 
-      <div className="p-2.5 bg-white dark:bg-[#111b21] border-b border-[#e9edef] dark:border-[#222e35] flex flex-col gap-2 flex-shrink-0">
-        <div className="flex items-center h-9 px-3 bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg text-sm text-[#111b21] dark:text-[#e9edef]">
-          <FaSearch className="w-3.5 h-3.5 text-[#8696a0] mr-3 flex-shrink-0" />
-          <input
-            type="text"
-            placeholder="Search or start new chat"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-transparent outline-none text-xs placeholder-[#8696a0]"
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery("")}>
-              <FaTimes className="w-3 h-3 text-[#8696a0] hover:text-gray-700 dark:hover:text-white" />
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1.5 px-1">
-          <button
-            onClick={() => setFilterType("all")}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-              filterType === "all"
-                ? "bg-[#00a884]/15 text-[#00a884] dark:bg-[#00a884]/25"
-                : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
-            }`}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setFilterType("unread")}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-              filterType === "unread"
-                ? "bg-[#00a884]/15 text-[#00a884] dark:bg-[#00a884]/25"
-                : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
-            }`}
-          >
-            Unread
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto divide-y divide-[#e9edef]/60 dark:divide-[#222e35]/60">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-16 text-[#8696a0]">
-            <div className="w-8 h-8 border-2 border-[#00a884] border-t-transparent rounded-full animate-spin mb-3" />
-            <span className="text-xs">Loading chats...</span>
-          </div>
-        ) : filteredUsers.length === 0 ? (
-          <div className="text-center py-12 px-6 text-[#8696a0]">
-            <FaUsers className="w-10 h-10 mx-auto mb-2 opacity-40" />
-            <p className="text-xs font-medium">No conversations found</p>
-            <p className="text-[11px] mt-1 text-[#8696a0]/80">
-              Users registered on WhatsApp will show up here.
-            </p>
-          </div>
-        ) : (
-          filteredUsers.map((userItem) => {
-            const isSelected = selectedContact?._id === userItem._id;
-            const conv = conversations.find((c) =>
-              c.participants?.some((p) => (p._id || p)?.toString() === userItem._id?.toString())
-            );
-            const lastMsg = conv?.lastMessage || userItem.conversation?.lastMessage;
-            const unread = conv?.unreadCount ?? userItem.unreadCount ?? 0;
-            const isOnline = isUserOnline(userItem._id) || userItem.isOnline;
-
-            return (
-              <div
-                key={userItem._id}
-                onClick={() => setSelectedContact(userItem)}
-                className={`flex items-center gap-3 px-3.5 py-3 cursor-pointer transition-colors ${
-                  isSelected
-                    ? "bg-[#f0f2f5] dark:bg-[#2a3942]"
-                    : "hover:bg-[#f5f6f6] dark:hover:bg-[#202c33]/70"
+          <div className="flex items-center gap-1.5 px-1">
+            {["all", "unread"].map((type) => (
+              <button
+                key={type}
+                onClick={() => setFilterType(type)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors capitalize ${
+                  filterType === type
+                    ? "bg-[#00a884]/15 text-[#00a884] dark:bg-[#00a884]/25"
+                    : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
                 }`}
               >
-                <div className="relative flex-shrink-0">
-                  <img
-                    src={getAvatarUrl(userItem, userItem.username)}
-                    alt={userItem.username}
-                    onError={(e) => {
-                      e.target.onerror = null;
-                      e.target.src = getAvatarUrl(null, userItem.username);
-                    }}
-                    className="w-12 h-12 rounded-full object-cover bg-gray-200 dark:bg-gray-700"
-                  />
-                  {isOnline && (
-                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#25d366] rounded-full border-2 border-white dark:border-[#111b21]" />
-                  )}
-                </div>
+                {type.charAt(0).toUpperCase() + type.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <h2 className="text-sm font-semibold text-[#111b21] dark:text-[#e9edef] truncate">
-                      {userItem.username}
-                    </h2>
-                    <span className="text-[11px] text-[#8696a0] flex-shrink-0 ml-2 font-mono">
-                      {formatTime(lastMsg?.createdAt || userItem.lastSeen)}
-                    </span>
-                  </div>
+        {/* Chat list */}
+        <div className="flex-1 overflow-y-auto divide-y divide-[#e9edef]/60 dark:divide-[#222e35]/60">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-16 text-[#8696a0]">
+              <div className="w-8 h-8 border-2 border-[#00a884] border-t-transparent rounded-full animate-spin mb-3" />
+              <span className="text-xs">Loading chats...</span>
+            </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="text-center py-12 px-6 text-[#8696a0]">
+              <FaUsers className="w-10 h-10 mx-auto mb-2 opacity-40" />
+              <p className="text-xs font-medium">No conversations found</p>
+              <p className="text-[11px] mt-1 text-[#8696a0]/80">
+                Users registered on WhatsApp will show up here.
+              </p>
+            </div>
+          ) : (
+            filteredUsers.map((userItem) => {
+              const isSelected = selectedContact?._id === userItem._id;
+              const conv = conversations.find((c) =>
+                c.participants?.some((p) => (p._id || p)?.toString() === userItem._id?.toString())
+              );
+              const lastMsg = conv?.lastMessage || userItem.conversation?.lastMessage;
+              const unread = conv?.unreadCount ?? userItem.unreadCount ?? 0;
+              const isOnline = isUserOnline(userItem._id) || userItem.isOnline;
 
-                  <div className="flex items-center justify-between text-xs text-[#54656f] dark:text-[#8696a0]">
-                    <p className="truncate text-xs text-[#54656f] dark:text-[#8696a0]">
-                      {lastMsg?.content || userItem.about || "Hey there! I am using WhatsApp."}
-                    </p>
-                    {unread > 0 && (
-                      <span className="ml-2 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-[#25d366] text-white text-[10px] font-bold rounded-full flex-shrink-0">
-                        {unread}
-                      </span>
+              return (
+                <div
+                  key={userItem._id}
+                  onClick={() => setSelectedContact(userItem)}
+                  onContextMenu={(e) => handleContextMenu(e, userItem, conv)}
+                  onTouchStart={(e) => startLongPress(e, userItem, conv)}
+                  onTouchEnd={cancelLongPress}
+                  onTouchMove={cancelLongPress}
+                  className={`group relative flex items-center gap-3 px-3.5 py-3 cursor-pointer transition-colors ${
+                    isSelected
+                      ? "bg-[#f0f2f5] dark:bg-[#2a3942]"
+                      : "hover:bg-[#f5f6f6] dark:hover:bg-[#202c33]/70"
+                  }`}
+                >
+                  {/* Avatar */}
+                  <div className="relative flex-shrink-0">
+                    <img
+                      src={getAvatarUrl(userItem, userItem.username)}
+                      alt={userItem.username}
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = getAvatarUrl(null, userItem.username);
+                      }}
+                      className="w-12 h-12 rounded-full object-cover bg-gray-200 dark:bg-gray-700"
+                    />
+                    {isOnline && (
+                      <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#25d366] rounded-full border-2 border-white dark:border-[#111b21]" />
                     )}
                   </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <h2 className="text-sm font-semibold text-[#111b21] dark:text-[#e9edef] truncate">
+                        {userItem.username}
+                      </h2>
+                      <span className="text-[11px] text-[#8696a0] flex-shrink-0 ml-2 font-mono">
+                        {formatTime(lastMsg?.createdAt || userItem.lastSeen)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-[#54656f] dark:text-[#8696a0]">
+                      <p className="truncate text-xs text-[#54656f] dark:text-[#8696a0]">
+                        {lastMsg?.content || userItem.about || "Hey there! I am using WhatsApp."}
+                      </p>
+                      {unread > 0 && (
+                        <span className="ml-2 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-[#25d366] text-white text-[10px] font-bold rounded-full flex-shrink-0">
+                          {unread}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Delete button — visible on hover when conv exists */}
+                  {conv && (
+                    <button
+                      id={`delete-chat-hover-${userItem._id}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmDelete({ userItem, conv });
+                      }}
+                      title="Delete chat"
+                      className="opacity-0 group-hover:opacity-100 absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-[#8696a0] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                    >
+                      <FaTrashAlt className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
-              </div>
-            );
-          })
-        )}
+              );
+            })
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Right-click context menu */}
+      <AnimatePresence>
+        {contextMenu && (
+          <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            onDelete={handleDeleteRequest}
+            onClose={() => setContextMenu(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Delete confirmation dialog */}
+      {confirmDelete && (
+        <DeleteChatDialog
+          contactName={confirmDelete.userItem?.username}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+    </>
   );
 };
 
