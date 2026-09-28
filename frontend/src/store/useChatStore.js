@@ -106,6 +106,22 @@ const useChatStore = create((set, get) => ({
       }));
     });
 
+    // Handle the other participant's side when a conversation is cleared
+    socket.on("conversationCleared", ({ conversationId }) => {
+      if (!conversationId) return;
+      set((state) => ({
+        conversations: state.conversations.map((c) =>
+          c._id?.toString() === conversationId?.toString()
+            ? { ...c, lastMessage: null, unreadCount: 0 }
+            : c
+        ),
+        messages:
+          state.currentConversation?.toString() === conversationId?.toString()
+            ? []
+            : state.messages,
+      }));
+    });
+
     const handleUserTyping = ({ userId, senderId, conversationId, isTyping }) => {
       const effectiveUserId = (userId || senderId)?.toString();
       if (!conversationId || !effectiveUserId) return;
@@ -354,6 +370,34 @@ const useChatStore = create((set, get) => ({
       }
     } catch (err) {
       console.error("Failed to delete message:", err);
+      const activeConvId = get().currentConversation;
+      if (activeConvId) get().fetchMessages(activeConvId);
+    }
+  },
+
+  clearConversation: async (conversationId) => {
+    if (!conversationId) return;
+    const convIdStr = conversationId?.toString();
+
+    // Optimistically clear messages in the UI
+    set((state) => ({
+      conversations: state.conversations.map((c) =>
+        c._id?.toString() === convIdStr
+          ? { ...c, lastMessage: null, unreadCount: 0 }
+          : c
+      ),
+      messages:
+        state.currentConversation?.toString() === convIdStr ? [] : state.messages,
+    }));
+
+    try {
+      await chatApi.clearConversation(convIdStr);
+      const socket = getSocket();
+      if (socket) {
+        socket.emit("conversation_cleared", { conversationId: convIdStr });
+      }
+    } catch (err) {
+      console.error("Failed to clear conversation:", err);
       const activeConvId = get().currentConversation;
       if (activeConvId) get().fetchMessages(activeConvId);
     }

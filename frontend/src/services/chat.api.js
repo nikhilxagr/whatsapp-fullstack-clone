@@ -65,3 +65,13 @@ export const deleteConversation = async (conversationId) => {
     return fallback.data;
   }
 };
+
+export const clearConversation = async (conversationId) => {
+  try {
+    const res = await axiosInstance.delete(`/chats/clear-conversation/${conversationId}`);
+    return res.data;
+  } catch {
+    const fallback = await axiosInstance.delete(`/chat/clear-conversation-legacy/${conversationId}`);
+    return fallback.data;
+  }
+};

@@ -324,3 +324,39 @@ exports.deleteConversation = async (req, res) => {
     return response(res, 500, "Failed to delete conversation", { error: error.message });
   }
 };
+
+exports.clearConversation = async (req, res) => {
+  const { conversationId } = req.params;
+  const userId = req.user?._id || req.user?.userId;
+
+  try {
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return response(res, 404, "Conversation not found");
+    }
+    if (!conversation.participants.map((p) => p.toString()).includes(userId.toString())) {
+      return response(res, 403, "You are not a participant in this conversation");
+    }
+
+    // Delete all messages but keep the conversation
+    await Message.deleteMany({ conversation: conversationId });
+
+    // Reset the lastMessage and unreadCount
+    conversation.lastMessage = null;
+    conversation.unreadCount = 0;
+    await conversation.save();
+
+    if (req.io && req.socketUserMap) {
+      const otherParticipant = conversation.participants.find(p => p.toString() !== userId.toString());
+      const receiverSocketId = req.socketUserMap.get(otherParticipant?.toString());
+      if (receiverSocketId) {
+        req.io.to(receiverSocketId).emit("conversationCleared", { conversationId });
+      }
+    }
+
+    return response(res, 200, "Chat cleared successfully");
+  } catch (error) {
+    console.error("Error clearing conversation:", error);
+    return response(res, 500, "Failed to clear chat", { error: error.message });
+  }
+};
