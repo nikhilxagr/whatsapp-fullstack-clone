@@ -2,13 +2,31 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WhatsApp Web</title>
+    <meta
+      name="description"
+      content="WhatsApp Web - End-to-end encrypted messaging, voice and video chat, media sharing, and real-time status updates."
+    />
+
+    <!-- Theme & App Branding -->
+    <meta name="theme-color" content="#00a884" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="WhatsApp" />
+
+    <!-- Icons & Manifest -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="alternate icon" href="/favicon.ico" />
-    <meta name="theme-color" content="#00a884" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="apple-touch-icon" href="/logo192.png" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Preconnect / DNS Prefetch -->
     <link rel="dns-prefetch" href="https://whatsapp-backend-97f3.onrender.com" />
     <link rel="preconnect" href="https://whatsapp-backend-97f3.onrender.com" crossorigin />
-    <title>WhatsApp Web</title>
+
+    <!-- Pre-warm Render Backend -->
     <script>
       (function () {
         try {
@@ -16,6 +34,22 @@
           fetch(targetUrl, { method: "GET", mode: "cors" }).catch(function () {});
         } catch (e) {}
       })();
+    </script>
+
+    <!-- Register PWA Service Worker -->
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker
+            .register("/sw.js")
+            .then(function (reg) {
+              console.log("✅ PWA Service Worker registered:", reg.scope);
+            })
+            .catch(function (err) {
+              console.warn("⚠️ PWA Service Worker registration failed:", err);
+            });
+        });
+      }
     </script>
   </head>
   <body>
