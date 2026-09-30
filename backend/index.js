@@ -13,6 +13,7 @@ const express = require("express");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const http = require("http");
+const mongoose = require("mongoose");
 
 const connectDB = require("./config/dbConnect");
 const authRoute = require("./routes/authRoute");
@@ -76,7 +77,12 @@ app.get("/", (req, res) => {
 });
 
 app.get("/api/health", (req, res) => {
-  res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+  const isDbReady = mongoose.connection.readyState === 1;
+  res.status(200).json({
+    status: "ok",
+    database: isDbReady ? "connected" : "connecting",
+    timestamp: new Date().toISOString(),
+  });
 });
 
 app.use("/api/auth", authRoute);

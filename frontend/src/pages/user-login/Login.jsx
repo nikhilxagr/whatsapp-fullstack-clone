@@ -23,6 +23,7 @@ import { toast } from "react-toastify";
 import useLoginStore from "../../store/useLoginStore";
 import useUserStore from "../../store/useUserStore";
 import useThemeStore from "../../store/useThemeStore";
+import useServerStore from "../../store/useServerStore";
 import countries from "../../utils/countries";
 import {
   register,
@@ -162,7 +163,12 @@ const Login = () => {
     useLoginStore();
   const { setUser } = useUserStore();
   const { theme, toggleTheme } = useThemeStore();
+  const { isReady, isWarming, warmUp } = useServerStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    warmUp();
+  }, [warmUp]);
 
   // Form fields
   const [email, setEmail] = useState("");
@@ -231,6 +237,9 @@ const Login = () => {
 
     setLoading(true);
     try {
+      if (!isReady) {
+        await warmUp();
+      }
       const res = await register({
         email: email.trim(),
         password,
@@ -323,6 +332,9 @@ const Login = () => {
 
     setLoading(true);
     try {
+      if (!isReady) {
+        await warmUp();
+      }
       const res = await loginWithEmail({ email: email.trim(), password });
       if (res.status === "success") {
         const user = res.data?.user;
@@ -347,6 +359,9 @@ const Login = () => {
 
     setLoading(true);
     try {
+      if (!isReady) {
+        await warmUp();
+      }
       const res = await loginWithPhone({
         phoneNumber: phone.trim(),
         phoneSuffix: country.dialCode,
@@ -444,6 +459,21 @@ const Login = () => {
           </div>
         )}
 
+        {/* Server & DB Connection Warmup Status */}
+        <div className="flex items-center justify-center mb-5">
+          {isReady ? (
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span>Server Online • MongoDB Connected</span>
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#00a884]/10 border border-[#00a884]/20 text-[#075e54] dark:text-[#25d366] text-xs font-medium animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-[#00a884] dark:bg-[#25d366] animate-ping" />
+              <span>Waking up server & connecting to MongoDB...</span>
+            </div>
+          )}
+        </div>
+
         {mode === "register" && (
           <div className="mb-5">
             <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[#075e54] dark:text-[#00a884] mb-1.5">
@@ -536,7 +566,14 @@ const Login = () => {
                   disabled={loading}
                   className="w-full h-12 mt-2 rounded-xl bg-[#075e54] hover:bg-[#064e45] active:bg-[#053e37] dark:bg-[#008069] dark:hover:bg-[#00a884] dark:active:bg-[#075e54] text-white font-semibold text-sm tracking-wide transition-all shadow-md shadow-[#075e54]/25 dark:shadow-[#008069]/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {loading ? <Spinner /> : "Sign In"}
+                  {loading ? (
+                    <div className="flex items-center gap-2">
+                      <Spinner />
+                      <span>{!isReady ? "Connecting to server..." : "Signing In..."}</span>
+                    </div>
+                  ) : (
+                    "Sign In"
+                  )}
                 </button>
               </form>
             ) : (
@@ -562,7 +599,14 @@ const Login = () => {
                   disabled={loading}
                   className="w-full h-12 mt-2 rounded-xl bg-[#075e54] hover:bg-[#064e45] active:bg-[#053e37] dark:bg-[#008069] dark:hover:bg-[#00a884] dark:active:bg-[#075e54] text-white font-semibold text-sm tracking-wide transition-all shadow-md shadow-[#075e54]/25 dark:shadow-[#008069]/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {loading ? <Spinner /> : "Sign In with Phone"}
+                  {loading ? (
+                    <div className="flex items-center gap-2">
+                      <Spinner />
+                      <span>{!isReady ? "Connecting to server..." : "Signing In..."}</span>
+                    </div>
+                  ) : (
+                    "Sign In with Phone"
+                  )}
                 </button>
               </form>
             )}
@@ -627,7 +671,14 @@ const Login = () => {
               disabled={loading}
               className="w-full h-12 mt-2 rounded-xl bg-[#075e54] hover:bg-[#064e45] active:bg-[#053e37] dark:bg-[#008069] dark:hover:bg-[#00a884] dark:active:bg-[#075e54] text-white font-semibold text-sm tracking-wide transition-all shadow-md shadow-[#075e54]/25 dark:shadow-[#008069]/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {loading ? <Spinner /> : "Send Verification Code"}
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <Spinner />
+                  <span>{!isReady ? "Connecting to server..." : "Sending Code..."}</span>
+                </div>
+              ) : (
+                "Send Verification Code"
+              )}
             </button>
           </form>
         )}

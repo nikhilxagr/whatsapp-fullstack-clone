@@ -1,4 +1,5 @@
 import axiosInstance from "./url.service";
+import useServerStore from "../store/useServerStore";
 
 export const register = async ({ email, password, phoneNumber, phoneSuffix }) => {
   try {
@@ -54,6 +55,13 @@ export const loginWithPhone = async ({ phoneNumber, phoneSuffix, password }) => 
 };
 
 export const checkUserAuth = async () => {
+  const token = typeof localStorage !== "undefined" ? localStorage.getItem("auth_token") : null;
+  if (!token) {
+    // No saved token: avoid blocking UI and trigger background warm-up
+    useServerStore.getState().warmUp();
+    return { isAuthenticated: false, user: null };
+  }
+
   try {
     const res = await axiosInstance.get("/auth/check-auth");
     if (res.data.status === "success") {

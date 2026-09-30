@@ -15,12 +15,17 @@ import useUserStore from "./store/useUserStore";
 import useChatStore from "./store/useChatStore";
 import useCallStore from "./store/useCallStore";
 import useStatusStore from "./store/useStatusStore";
+import useServerStore from "./store/useServerStore";
 import { initializeSocket, disconnectSocket, getSocket } from "./services/chat.service";
 
 function App() {
   const { user } = useUserStore();
   const { setCurrentUser, fetchConversations, cleanUp } = useChatStore();
   const { onIncomingCall, onCallAnswered, onRemoteIceCandidate, onCallRejected, onCallEnded } = useCallStore();
+
+  useEffect(() => {
+    useServerStore.getState().warmUp();
+  }, []);
 
   useEffect(() => {
     if (!user?._id) {
