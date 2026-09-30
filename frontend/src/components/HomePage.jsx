@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Layout from "./Layout";
 import ChatList from "./ChatList";
 import StatusSection from "./status/StatusSection";
+import ImageCropperModal from "./ImageCropperModal";
 import useLayoutStore from "../store/useLayoutStore";
 import useUserStore from "../store/useUserStore";
 import useChatStore from "../store/useChatStore";
@@ -56,6 +57,8 @@ const HomePage = () => {
 
   const [uploading, setUploading] = useState(false);
   const [removingPhoto, setRemovingPhoto] = useState(false);
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState(null);
   const fileInputRef = useRef(null);
 
   const [isEditingName, setIsEditingName] = useState(false);
@@ -150,7 +153,7 @@ const HomePage = () => {
     }
   };
 
-  const handlePhotoUpload = async (e) => {
+  const handlePhotoSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -163,22 +166,27 @@ const HomePage = () => {
       return;
     }
 
-    // Validate file size (10MB max)
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("Image file is too large. Maximum size is 10MB.");
+    // Validate file size (15MB max)
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error("Image file is too large. Maximum size is 15MB.");
       return;
     }
 
+    const tempUrl = URL.createObjectURL(file);
+    setImageToCrop(tempUrl);
+    setCropperOpen(true);
+  };
+
+  const handleCropComplete = async (croppedFile, localPreviewUrl) => {
     const previousUser = user;
-    // Instant optimistic preview so user sees new photo immediately
-    const localPreviewUrl = URL.createObjectURL(file);
+    // Instant optimistic preview so user sees new cropped photo immediately
     setUser({ ...user, profilePicture: localPreviewUrl });
     setCurrentUser?.({ ...user, profilePicture: localPreviewUrl });
 
     try {
       setUploading(true);
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", croppedFile);
 
       const response = await updateUserProfile(formData);
       const updatedUser = response?.data?.user || response?.user;
@@ -186,6 +194,8 @@ const HomePage = () => {
         setUser(updatedUser);
         setCurrentUser?.(updatedUser);
         toast.success("Profile photo updated successfully!");
+        setCropperOpen(false);
+        setImageToCrop(null);
       } else {
         throw new Error(response?.message || "Failed to update profile photo");
       }
@@ -198,6 +208,12 @@ const HomePage = () => {
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleCloseCropper = () => {
+    if (uploading) return;
+    setCropperOpen(false);
+    setImageToCrop(null);
   };
 
   const handleRemovePhoto = async () => {
@@ -401,7 +417,7 @@ const HomePage = () => {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                onChange={handlePhotoUpload}
+                onChange={handlePhotoSelect}
                 className="hidden"
               />
 
@@ -599,6 +615,15 @@ const HomePage = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {cropperOpen && imageToCrop && (
+        <ImageCropperModal
+          imageSrc={imageToCrop}
+          onClose={handleCloseCropper}
+          onCropComplete={handleCropComplete}
+          isUploading={uploading}
+        />
       )}
     </Layout>
   );

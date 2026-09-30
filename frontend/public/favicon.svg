@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="waGreenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00a884" />
+      <stop offset="60%" stop-color="#25d366" />
+      <stop offset="100%" stop-color="#075e54" />
+    </linearGradient>
+    <linearGradient id="bubbleHighlight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    <filter id="waShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#04332d" flood-opacity="0.45" />
+    </filter>
+  </defs>
+
+  <!-- WhatsApp Green Chat Bubble -->
+  <path
+    d="M32 5 C17.09 5 5 17.09 5 32 C5 37.35 6.56 42.33 9.27 46.54 L6 59 L18.88 55.68 C22.88 57.99 27.28 59.3 32 59.3 C46.91 59.3 59 47.21 59 32.3 C59 17.39 46.91 5 32 5 Z"
+    fill="url(#waGreenGrad)"
+    filter="url(#waShadow)"
+  />
+
+  <!-- Subtle top gloss highlight -->
+  <path
+    d="M32 7 C18.19 7 7 18.19 7 32 C7 35.8 7.9 39.38 9.5 42.6 C13 22 26 10 47.5 9.2 C42.8 7.8 37.6 7 32 7 Z"
+    fill="url(#bubbleHighlight)"
+  />
+
+  <!-- Distinctive WhatsApp-style Emblem: Dual Messaging Checks & Wave -->
+  <g fill="none" stroke="#ffffff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Left Checkmark -->
+    <path d="M18 33 L26 41 L42 23" />
+    <!-- Right Checkmark (Delivered / Read Receipt) -->
+    <path d="M29 41 L46 23" />
+  </g>
+
+  <!-- Small notification sparkle / pulse dot -->
+  <circle cx="45" cy="17" r="3.2" fill="#ffffff" opacity="0.9" />
+</svg>
