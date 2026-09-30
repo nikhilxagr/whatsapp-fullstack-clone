@@ -1,9 +1,22 @@
 import axios from 'axios';
 
-const apiUrl =
+const isLocalhost =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    window.location.hostname === '');
+
+const defaultLocalUrl = 'http://localhost:5001/api';
+const defaultProdUrl = 'https://whatsapp-backend-97f3.onrender.com/api';
+
+const envUrl =
   (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_API_URL || import.meta.env.REACT_APP_API_URL)) ||
-  (typeof process !== 'undefined' && process.env?.REACT_APP_API_URL) ||
-  'https://whatsapp-backend-97f3.onrender.com/api';
+  (typeof process !== 'undefined' && process.env?.REACT_APP_API_URL);
+
+// When running locally in browser (localhost), use local backend on 5001 so API calls don't hang on Render free-tier cold-boot/blocked SMTP
+const apiUrl = isLocalhost
+  ? (envUrl && !envUrl.includes('onrender.com') ? envUrl : defaultLocalUrl)
+  : (envUrl || defaultProdUrl);
 
 const axiosInstance = axios.create({
   baseURL: apiUrl,

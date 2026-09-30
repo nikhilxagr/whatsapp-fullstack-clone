@@ -28,6 +28,15 @@ export const verifyEmail = async ({ email, otp }) => {
   }
 };
 
+export const resendOtp = async ({ email }) => {
+  try {
+    const res = await axiosInstance.post("/auth/resend-otp", { email });
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err.message;
+  }
+};
+
 export const loginWithEmail = async ({ email, password }) => {
   try {
     const res = await axiosInstance.post("/auth/login/email", { email, password });

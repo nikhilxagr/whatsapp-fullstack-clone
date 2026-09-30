@@ -28,8 +28,10 @@ const register = async (req, res) => {
     return response(res, 400, "Password must be at least 6 characters");
   }
 
+  const cleanEmail = email.trim().toLowerCase();
+
   try {
-    const existing = await User.findOne({ email: email.toLowerCase() });
+    const existing = await User.findOne({ email: cleanEmail });
     if (existing && existing.isVerified) {
       return response(res, 409, "An account with this email already exists. Please sign in.");
     }
@@ -39,14 +41,24 @@ const register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     let user = existing || new User({});
-    user.email = email.toLowerCase();
+    user.email = cleanEmail;
     user.password = hashedPassword;
     user.emailOtp = otp;
     user.emailOtpExpiry = otpExpiry;
     user.isVerified = false;
 
     if (phoneNumber && phoneSuffix) {
-      user.phoneNumber = `${phoneSuffix}${phoneNumber}`;
+      const fullPhone = `${phoneSuffix}${phoneNumber.trim()}`;
+      const existingPhoneUser = await User.findOne({ phoneNumber: fullPhone });
+      if (existingPhoneUser && existingPhoneUser.isVerified && existingPhoneUser.email !== cleanEmail) {
+        return response(res, 409, "This phone number is already registered to another verified account.");
+      }
+      if (existingPhoneUser && !existingPhoneUser.isVerified && existingPhoneUser.email !== cleanEmail) {
+        existingPhoneUser.phoneNumber = undefined;
+        existingPhoneUser.phoneSuffix = undefined;
+        await existingPhoneUser.save();
+      }
+      user.phoneNumber = fullPhone;
       user.phoneSuffix = phoneSuffix;
     } else {
       user.phoneNumber = undefined;
@@ -55,19 +67,19 @@ const register = async (req, res) => {
 
     await user.save();
 
-    let emailSent = false;
-    try {
-      await sendOtpToEmail(email.toLowerCase(), otp);
-      emailSent = true;
-    } catch (mailError) {
-      console.error("⚠️ Failed to send OTP email via Gmail:", mailError.message);
-      console.log(`🔑 [VERIFICATION OTP FOR ${email.toLowerCase()}]: ${otp}`);
-    }
+    // Send email asynchronously via pooled transporter (doesn't block client response)
+    sendOtpToEmail(cleanEmail, otp)
+      .then(() => {
+        console.log(`✉️ [Nodemailer] OTP successfully delivered to ${cleanEmail}`);
+      })
+      .catch((mailError) => {
+        console.error("⚠️ [Nodemailer] Failed to send OTP email:", mailError.message);
+        console.log(`🔑 [FALLBACK OTP FOR ${cleanEmail}]: ${otp}`);
+      });
 
     return response(res, 200, "Verification code sent to your email", {
-      email: email.toLowerCase(),
-      ...((!emailSent || process.env.NODE_ENV !== "production") ? { devOtp: otp } : {}),
-      emailSent,
+      email: cleanEmail,
+      emailSent: true,
     });
   } catch (err) {
     console.error("Register error:", err.message, err.code);
@@ -78,6 +90,36 @@ const register = async (req, res) => {
   }
 };
 
+const resendOtp = async (req, res) => {
+  const { email } = req.body;
+  if (!email) return response(res, 400, "Email is required");
+
+  try {
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: cleanEmail });
+    if (!user) return response(res, 404, "User not found");
+    if (user.isVerified) {
+      return response(res, 400, "Account already verified. Please sign in.");
+    }
+
+    const otp = otpGenerator();
+    user.emailOtp = otp;
+    user.emailOtpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
+
+    sendOtpToEmail(cleanEmail, otp)
+      .then(() => console.log(`✉️ [Nodemailer] Resent OTP to ${cleanEmail}`))
+      .catch((err) => console.error("⚠️ Failed to resend OTP:", err.message));
+
+    return response(res, 200, "Verification code resent to your email", {
+      email: cleanEmail,
+    });
+  } catch (err) {
+    console.error("Resend OTP error:", err.message);
+    return response(res, 500, "Failed to resend code", { error: err.message });
+  }
+};
+
 const verifyEmail = async (req, res) => {
   const { email, otp } = req.body;
   if (!email || !otp) {
@@ -85,10 +127,11 @@ const verifyEmail = async (req, res) => {
   }
 
   try {
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: cleanEmail });
     if (!user) return response(res, 404, "User not found");
 
-    if (!user.emailOtp || String(user.emailOtp) !== String(otp)) {
+    if (!user.emailOtp || String(user.emailOtp).trim() !== String(otp).trim()) {
       return response(res, 400, "Invalid verification code");
     }
     if (new Date() > new Date(user.emailOtpExpiry)) {
@@ -101,7 +144,12 @@ const verifyEmail = async (req, res) => {
     await user.save();
 
     const token = issueToken(res, user._id);
-    return response(res, 200, "Email verified successfully", { token, user });
+    const safeUser = user.toObject();
+    delete safeUser.password;
+    delete safeUser.emailOtp;
+    delete safeUser.emailOtpExpiry;
+
+    return response(res, 200, "Email verified successfully", { token, user: safeUser });
   } catch (err) {
     console.error("Verify email error:", err.message);
     return response(res, 500, "Verification failed", { error: err.message });
@@ -115,7 +163,8 @@ const loginWithEmail = async (req, res) => {
   }
 
   try {
-    const user = await User.findOne({ email: email.toLowerCase() }).select("+password");
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: cleanEmail }).select("+password");
     if (!user) return response(res, 401, "No account found with this email");
     if (!user.isVerified) {
       return response(res, 401, "Please verify your email before signing in");
@@ -128,7 +177,11 @@ const loginWithEmail = async (req, res) => {
     if (!isMatch) return response(res, 401, "Incorrect password");
 
     const token = issueToken(res, user._id);
-    const safeUser = await User.findById(user._id);
+    const safeUser = user.toObject();
+    delete safeUser.password;
+    delete safeUser.emailOtp;
+    delete safeUser.emailOtpExpiry;
+
     return response(res, 200, "Signed in successfully", { token, user: safeUser });
   } catch (err) {
     console.error("Login email error:", err.message);
@@ -143,7 +196,7 @@ const loginWithPhone = async (req, res) => {
   }
 
   try {
-    const fullPhone = `${phoneSuffix}${phoneNumber}`;
+    const fullPhone = `${phoneSuffix}${phoneNumber.trim()}`;
     const user = await User.findOne({ phoneNumber: fullPhone }).select("+password");
     if (!user) return response(res, 401, "No account found with this phone number");
     if (!user.isVerified) {
@@ -157,7 +210,11 @@ const loginWithPhone = async (req, res) => {
     if (!isMatch) return response(res, 401, "Incorrect password");
 
     const token = issueToken(res, user._id);
-    const safeUser = await User.findById(user._id);
+    const safeUser = user.toObject();
+    delete safeUser.password;
+    delete safeUser.emailOtp;
+    delete safeUser.emailOtpExpiry;
+
     return response(res, 200, "Signed in successfully", { token, user: safeUser });
   } catch (err) {
     console.error("Login phone error:", err.message);
@@ -330,6 +387,7 @@ const verifyFirebasePhone = async (req, res) => {
 
 module.exports = {
   register,
+  resendOtp,
   verifyEmail,
   loginWithEmail,
   loginWithPhone,

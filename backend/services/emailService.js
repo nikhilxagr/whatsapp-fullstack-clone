@@ -4,13 +4,19 @@ dotenv.config();
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
-  port: 587,
-  secure: false, // TLS
+  port: 465,
+  secure: true, // Direct SSL
+  pool: true, // Keep connections pooled and warm
+  maxConnections: 3,
+  maxMessages: 100,
+  connectionTimeout: 7000,
+  greetingTimeout: 7000,
+  socketTimeout: 15000,
   auth: {
     user: process.env.EMAIL,
     pass: process.env.EMAIL_PASSWORD ? process.env.EMAIL_PASSWORD.replace(/\s+/g, "") : "",
   },
-  family: 4, // Force IPv4 (prevents ENETUNREACH error on Render)
+  family: 4, // Force IPv4
   tls: {
     rejectUnauthorized: false,
   },
@@ -20,7 +26,7 @@ transporter.verify((error) => {
   if (error) {
     console.warn("⚠️ Email service notice:", error.message);
   } else {
-    console.log("✅ Email service is ready via IPv4 SMTP");
+    console.log("✅ Email service is ready via pooled SSL SMTP");
   }
 });
 
@@ -91,7 +97,7 @@ const sendOtpToEmail = async (email, otp) => {
               <p style="margin:0 0 8px;font-size:15px;color:#111b21;font-weight:600;">Hi there,</p>
               <p style="margin:0 0 28px;font-size:14px;color:#54656f;line-height:1.6;">
                 Use the verification code below to confirm your email address.
-                This code will expire in <strong style="color:#111b21;">5 minutes</strong>.
+                This code will expire in <strong style="color:#111b21;">10 minutes</strong>.
               </p>
 
               <!-- OTP digits -->

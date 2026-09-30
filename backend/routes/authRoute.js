@@ -7,6 +7,7 @@ const router = express.Router();
 
 router.post("/register", authController.register);
 router.post("/verify-email", authController.verifyEmail);
+router.post("/resend-otp", authController.resendOtp);
 
 router.post("/login/email", authController.loginWithEmail);
 router.post("/login/phone", authController.loginWithPhone);

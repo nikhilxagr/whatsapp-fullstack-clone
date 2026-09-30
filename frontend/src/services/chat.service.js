@@ -4,12 +4,27 @@ import useUserStore from "../store/useUserStore";
 let socket = null;
 
 const getServerUrl = () => {
-  const apiUrl =
+  const isLocalhost =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1" ||
+      window.location.hostname === "");
+
+  const envUrl =
     import.meta?.env?.VITE_API_URL ||
     import.meta?.env?.REACT_APP_API_URL ||
-    process.env?.REACT_APP_API_URL ||
-    "https://whatsapp-backend-97f3.onrender.com/api";
-  return apiUrl.replace(/\/api\/?$/, "");
+    process.env?.REACT_APP_API_URL;
+
+  const defaultLocalUrl = "http://localhost:5001";
+  const defaultProdUrl = "https://whatsapp-backend-97f3.onrender.com";
+
+  if (isLocalhost) {
+    if (envUrl && !envUrl.includes("onrender.com")) {
+      return envUrl.replace(/\/api\/?$/, "");
+    }
+    return defaultLocalUrl;
+  }
+  return (envUrl || defaultProdUrl).replace(/\/api\/?$/, "");
 };
 
 export const initializeSocket = () => {

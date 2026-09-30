@@ -28,6 +28,7 @@ import countries from "../../utils/countries";
 import {
   register,
   verifyEmail,
+  resendOtp,
   loginWithEmail,
   loginWithPhone,
   updateUserProfile,
@@ -181,6 +182,8 @@ const Login = () => {
 
   // OTP state
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [resendTimer, setResendTimer] = useState(0);
+  const [resending, setResending] = useState(false);
 
   // Profile setup
   const [username, setUsername] = useState("");
@@ -200,77 +203,32 @@ const Login = () => {
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
 
+  // Resend OTP countdown timer
+  useEffect(() => {
+    let interval = null;
+    if (resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [resendTimer]);
+
   const clearError = () => setError("");
 
-  const handleOtpChange = (idx, val) => {
-    if (!/^\d*$/.test(val)) return;
-    const digit = val.slice(-1);
-    const next = [...otp];
-    next[idx] = digit;
-    setOtp(next);
-    if (digit && idx < 5) document.getElementById(`otp-${idx + 1}`)?.focus();
-  };
-
-  const handleOtpKeyDown = (idx, e) => {
-    if (e.key === "Backspace" && !otp[idx] && idx > 0) {
-      document.getElementById(`otp-${idx - 1}`)?.focus();
-    }
-  };
-
-  const handleOtpPaste = (e) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData("text").trim().replace(/\D/g, "");
-    if (pasted.length === 6) {
-      setOtp(pasted.split(""));
-      document.getElementById("otp-5")?.focus();
-    }
-  };
-
-  const handleRegisterSubmit = async (e) => {
-    e.preventDefault();
+  const triggerVerify = async (codeToVerify) => {
     clearError();
-
-    if (!email.trim()) return setError("Email is required");
-    if (!password) return setError("Password is required");
-    if (password.length < 6) return setError("Password must be at least 6 characters");
-    if (password !== confirmPassword) return setError("Passwords do not match");
-
-    setLoading(true);
-    try {
-      if (!isReady) {
-        await warmUp();
-      }
-      const res = await register({
-        email: email.trim(),
-        password,
-        phoneNumber: phone.trim() || undefined,
-        phoneSuffix: phone.trim() ? country.dialCode : undefined,
-      });
-      setPendingData({ email: email.trim() });
-      if (res?.data?.devOtp) {
-        toast.info(`Verification code: ${res.data.devOtp}`, { duration: 8000 });
-        setOtp(String(res.data.devOtp).split(""));
-      } else {
-        toast.success("Verification code sent to your email!");
-      }
-      setStep(2);
-    } catch (err) {
-      setError(err?.message || "Registration failed. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e) => {
-    e.preventDefault();
-    clearError();
-
-    const code = otp.join("");
+    const code = (codeToVerify || otp.join("")).trim();
     if (code.length !== 6) return setError("Please enter the full 6-digit code");
 
+    const targetEmail = pendingData?.email || email.trim();
+    if (!targetEmail) return setError("Session expired. Please start over.");
+
     setLoading(true);
     try {
-      const res = await verifyEmail({ email: pendingData.email, otp: code });
+      const res = await verifyEmail({ email: targetEmail, otp: code });
       if (res.status === "success") {
         const user = res.data?.user;
         // If profile is already complete, go straight to app
@@ -289,6 +247,93 @@ const Login = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOtpChange = (idx, val) => {
+    if (!/^\d*$/.test(val)) return;
+    const digit = val.slice(-1);
+    const next = [...otp];
+    next[idx] = digit;
+    setOtp(next);
+    if (digit && idx < 5) {
+      document.getElementById(`otp-${idx + 1}`)?.focus();
+    }
+    // Auto-verify when all 6 digits are typed
+    if (digit && idx === 5) {
+      const fullCode = next.join("");
+      if (fullCode.length === 6) {
+        triggerVerify(fullCode);
+      }
+    }
+  };
+
+  const handleOtpKeyDown = (idx, e) => {
+    if (e.key === "Backspace" && !otp[idx] && idx > 0) {
+      document.getElementById(`otp-${idx - 1}`)?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").trim().replace(/\D/g, "");
+    if (pasted.length === 6) {
+      setOtp(pasted.split(""));
+      document.getElementById("otp-5")?.focus();
+      triggerVerify(pasted);
+    }
+  };
+
+  const handleRegisterSubmit = async (e) => {
+    e.preventDefault();
+    clearError();
+
+    if (!email.trim()) return setError("Email is required");
+    if (!password) return setError("Password is required");
+    if (password.length < 6) return setError("Password must be at least 6 characters");
+    if (password !== confirmPassword) return setError("Passwords do not match");
+
+    setLoading(true);
+    try {
+      const res = await register({
+        email: email.trim(),
+        password,
+        phoneNumber: phone.trim() || undefined,
+        phoneSuffix: phone.trim() ? country.dialCode : undefined,
+      });
+      setPendingData({ email: email.trim() });
+      toast.success("Verification code sent to your email! Please check your inbox.");
+      setStep(2);
+      setResendTimer(30);
+    } catch (err) {
+      setError(err?.message || "Registration failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    const targetEmail = pendingData?.email || email.trim();
+    if (!targetEmail || resendTimer > 0 || resending) return;
+    clearError();
+    setResending(true);
+    try {
+      const res = await resendOtp({ email: targetEmail });
+      if (res?.status === "success" || res?.data) {
+        toast.success("New verification code sent to your email!");
+        setOtp(["", "", "", "", "", ""]);
+        document.getElementById("otp-0")?.focus();
+      }
+      setResendTimer(30);
+    } catch (err) {
+      setError(err?.message || "Failed to resend code. Please try again.");
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const handleVerifyOtp = (e) => {
+    if (e) e.preventDefault();
+    triggerVerify();
   };
 
   const handleProfileSetup = async (e) => {
@@ -332,9 +377,6 @@ const Login = () => {
 
     setLoading(true);
     try {
-      if (!isReady) {
-        await warmUp();
-      }
       const res = await loginWithEmail({ email: email.trim(), password });
       if (res.status === "success") {
         const user = res.data?.user;
@@ -359,9 +401,6 @@ const Login = () => {
 
     setLoading(true);
     try {
-      if (!isReady) {
-        await warmUp();
-      }
       const res = await loginWithPhone({
         phoneNumber: phone.trim(),
         phoneSuffix: country.dialCode,
@@ -458,21 +497,6 @@ const Login = () => {
             ))}
           </div>
         )}
-
-        {/* Server & DB Connection Warmup Status */}
-        <div className="flex items-center justify-center mb-5">
-          {isReady ? (
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span>Server Online • MongoDB Connected</span>
-            </div>
-          ) : (
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#00a884]/10 border border-[#00a884]/20 text-[#075e54] dark:text-[#25d366] text-xs font-medium animate-pulse">
-              <span className="w-2 h-2 rounded-full bg-[#00a884] dark:bg-[#25d366] animate-ping" />
-              <span>Waking up server & connecting to MongoDB...</span>
-            </div>
-          )}
-        </div>
 
         {mode === "register" && (
           <div className="mb-5">
@@ -684,10 +708,19 @@ const Login = () => {
         )}
 
         {mode === "register" && step === 2 && (
-          <form onSubmit={handleVerifyOtp} className="space-y-5">
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            <div className="bg-[#f0f2f5] dark:bg-[#202c33]/70 p-3.5 rounded-xl border border-[#d1d7db]/70 dark:border-[#2a3942] text-center">
+              <p className="text-xs text-[#54656f] dark:text-[#8696a0]">
+                We sent a 6-digit verification code to
+              </p>
+              <p className="text-sm font-bold text-[#111b21] dark:text-[#e9edef] mt-0.5 break-all">
+                {pendingData?.email || email}
+              </p>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-[#54656f] dark:text-[#8696a0] text-center mb-3">
-                6-Digit Verification Code
+                Enter 6-Digit Code
               </label>
               <div className="flex justify-between gap-2" onPaste={handleOtpPaste}>
                 {otp.map((digit, idx) => (
@@ -706,12 +739,31 @@ const Login = () => {
               </div>
             </div>
 
+            <div className="flex items-center justify-between text-xs px-1">
+              <span className="text-[#54656f] dark:text-[#8696a0]">Didn't get the code?</span>
+              <button
+                type="button"
+                onClick={handleResendOtp}
+                disabled={resendTimer > 0 || resending}
+                className="font-semibold text-[#075e54] dark:text-[#00a884] hover:underline disabled:text-[#8696a0] disabled:no-underline transition-colors"
+              >
+                {resending ? "Sending..." : resendTimer > 0 ? `Resend in ${resendTimer}s` : "Resend Code"}
+              </button>
+            </div>
+
             <button
               type="submit"
               disabled={loading || otp.join("").length !== 6}
               className="w-full h-12 rounded-xl bg-[#075e54] hover:bg-[#064e45] active:bg-[#053e37] dark:bg-[#008069] dark:hover:bg-[#00a884] dark:active:bg-[#075e54] text-white font-semibold text-sm tracking-wide transition-all shadow-md shadow-[#075e54]/25 dark:shadow-[#008069]/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {loading ? <Spinner /> : "Verify & Continue"}
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <Spinner />
+                  <span>Verifying...</span>
+                </div>
+              ) : (
+                "Verify & Continue"
+              )}
             </button>
 
             <button
@@ -719,7 +771,7 @@ const Login = () => {
               onClick={handleBack}
               className="w-full h-11 flex items-center justify-center text-xs font-medium rounded-xl bg-[#f0f2f5] dark:bg-[#202c33] hover:bg-[#e9edef] dark:hover:bg-[#2a3942] text-[#54656f] dark:text-[#aebac1] transition-colors"
             >
-              <FaArrowLeft className="mr-2 w-3 h-3" /> Wrong details? Go Back
+              <FaArrowLeft className="mr-2 w-3 h-3" /> Change Email / Back
             </button>
           </form>
         )}
