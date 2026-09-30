@@ -8,6 +8,7 @@ import {
   FaTrashAlt,
   FaBan,
   FaEraser,
+  FaPlus,
 } from "react-icons/fa";
 import { MdOutlineChat } from "react-icons/md";
 import { AnimatePresence, motion } from "framer-motion";
@@ -161,6 +162,7 @@ const ChatList = () => {
 
   // Container ref for native contextmenu listener
   const listRef = useRef(null);
+  const searchInputRef = useRef(null);
   const activeItemRef = useRef(null); // track which item was right-clicked
 
   useEffect(() => {
@@ -177,6 +179,17 @@ const ChatList = () => {
     };
     fetchUsers();
   }, []);
+
+  // Auto-select first chat on desktop if none selected yet
+  useEffect(() => {
+    if (users.length > 0 && !selectedContact && typeof window !== "undefined" && window.innerWidth > 768) {
+      const convList = Array.isArray(conversations) ? conversations : conversations?.data || [];
+      const userWithRecentConv = users.find((u) =>
+        convList.some((c) => c.participants?.some((p) => (p._id || p)?.toString() === u._id?.toString()))
+      );
+      setSelectedContact(userWithRecentConv || users[0]);
+    }
+  }, [users, conversations, selectedContact, setSelectedContact]);
 
   // ── Attach native contextmenu listener on the list container ──────────────
   // This guarantees preventDefault fires before the browser shows its menu.
@@ -294,58 +307,32 @@ const ChatList = () => {
     <>
       <div className="flex flex-col h-full bg-white dark:bg-[#111b21] border-r border-[#e9edef] dark:border-[#222e35] select-none transition-colors">
 
-        {/* ── Header ── */}
-        <div className="h-16 px-4 bg-[#f0f2f5] dark:bg-[#202c33] flex items-center justify-between border-b border-[#e9edef] dark:border-[#222e35] flex-shrink-0">
-          <div
-            onClick={() => setActiveTab("profile")}
-            className="flex items-center gap-3 cursor-pointer group"
-            title="View profile"
-          >
-            <img
-              src={getAvatarUrl(currentUser, currentUser?.username)}
-              alt="My Profile"
-              onError={(e) => { e.target.onerror = null; e.target.src = getAvatarUrl(null, currentUser?.username); }}
-              className="w-10 h-10 rounded-full object-cover ring-2 ring-transparent group-hover:ring-[#00a884] transition-all"
-            />
-            <span className="text-sm font-semibold text-[#111b21] dark:text-[#e9edef] hidden sm:inline max-w-[120px] truncate">
-              {currentUser?.username || "You"}
-            </span>
-          </div>
+        {/* ── Header: Chats + Green Plus Button ── */}
+        <div className="h-16 px-4 bg-white dark:bg-[#111b21] flex items-center justify-between flex-shrink-0">
+          <h1 className="text-xl font-bold text-[#111b21] dark:text-[#e9edef] tracking-tight">
+            Chats
+          </h1>
 
-          <div className="flex items-center gap-1 text-[#54656f] dark:text-[#aebac1]">
-            <button onClick={() => setActiveTab("status")} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors" title="Status">
-              <FaCircleNotch className="w-5 h-5" />
-            </button>
-            <button onClick={() => setActiveTab("chats")} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors" title="New chat">
-              <MdOutlineChat className="w-5 h-5" />
-            </button>
-            <div className="relative">
-              <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors" title="Menu">
-                <FaEllipsisV className="w-4 h-4" />
-              </button>
-              {showMenu && (
-                <div
-                  className="absolute right-0 top-10 w-44 bg-white dark:bg-[#233138] rounded-lg shadow-xl border border-gray-100 dark:border-[#222e35] py-2 z-50 text-sm"
-                  onMouseLeave={() => setShowMenu(false)}
-                >
-                  <button onClick={() => { setActiveTab("profile"); setShowMenu(false); }} className="w-full text-left px-4 py-2 hover:bg-[#f0f2f5] dark:hover:bg-[#182229] text-[#111b21] dark:text-[#e9edef]">Profile</button>
-                  <button onClick={() => { setActiveTab("settings"); setShowMenu(false); }} className="w-full text-left px-4 py-2 hover:bg-[#f0f2f5] dark:hover:bg-[#182229] text-[#111b21] dark:text-[#e9edef]">Settings</button>
-                </div>
-              )}
-            </div>
-          </div>
+          <button
+            onClick={() => searchInputRef.current?.focus()}
+            className="w-8 h-8 rounded-full bg-[#00a884] hover:bg-[#02906f] active:bg-[#075e54] flex items-center justify-center text-white shadow-sm transition-all hover:scale-105 active:scale-95"
+            title="New chat"
+          >
+            <FaPlus className="w-3.5 h-3.5" />
+          </button>
         </div>
 
-        {/* ── Search + Filter ── */}
-        <div className="p-2.5 bg-white dark:bg-[#111b21] border-b border-[#e9edef] dark:border-[#222e35] flex flex-col gap-2 flex-shrink-0">
-          <div className="flex items-center h-9 px-3 bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg">
-            <FaSearch className="w-3.5 h-3.5 text-[#8696a0] mr-3 flex-shrink-0" />
+        {/* ── Search Bar ── */}
+        <div className="px-3 pb-2.5 bg-white dark:bg-[#111b21] flex-shrink-0">
+          <div className="flex items-center h-9 px-3.5 bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg">
+            <FaSearch className="w-3.5 h-3.5 text-[#54656f] dark:text-[#8696a0] mr-3 flex-shrink-0" />
             <input
+              ref={searchInputRef}
               type="text"
               placeholder="Search or start new chat"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-transparent outline-none text-xs text-[#111b21] dark:text-[#e9edef] placeholder-[#8696a0]"
+              className="w-full bg-transparent outline-none text-xs sm:text-sm text-[#111b21] dark:text-[#e9edef] placeholder-[#8696a0]"
             />
             {searchQuery && (
               <button onClick={() => setSearchQuery("")}>
@@ -353,25 +340,10 @@ const ChatList = () => {
               </button>
             )}
           </div>
-          <div className="flex items-center gap-1.5 px-1">
-            {["all", "unread"].map((type) => (
-              <button
-                key={type}
-                onClick={() => setFilterType(type)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors capitalize ${
-                  filterType === type
-                    ? "bg-[#00a884]/15 text-[#00a884] dark:bg-[#00a884]/25"
-                    : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
-                }`}
-              >
-                {type.charAt(0).toUpperCase() + type.slice(1)}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* ── Chat list ── */}
-        <div ref={listRef} className="flex-1 overflow-y-auto divide-y divide-[#e9edef]/60 dark:divide-[#222e35]/60">
+        <div ref={listRef} className="flex-1 overflow-y-auto divide-y divide-[#e9edef]/40 dark:divide-[#222e35]/40">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16 text-[#8696a0]">
               <div className="w-8 h-8 border-2 border-[#00a884] border-t-transparent rounded-full animate-spin mb-3" />

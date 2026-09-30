@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   FaArrowLeft,
   FaSmile,
+  FaRegSmile,
   FaPaperclip,
   FaMicrophone,
   FaPaperPlane,
@@ -15,8 +16,12 @@ import {
   FaTrash,
   FaExclamationCircle,
   FaFileAlt,
+  FaEraser,
+  FaTrashAlt,
 } from "react-icons/fa";
 import { MdCall, MdVideocam } from "react-icons/md";
+import { IoSend } from "react-icons/io5";
+import { toast } from "react-toastify";
 import useUserStore from "../../store/useUserStore";
 import useChatStore from "../../store/useChatStore";
 import useLayoutStore from "../../store/useLayoutStore";
@@ -71,6 +76,8 @@ const ChatWindow = () => {
     isUserTyping,
     deleteMessage,
     addReaction,
+    clearConversation,
+    deleteConversation,
   } = useChatStore();
 
   const { startCall } = useCallStore();
@@ -78,6 +85,8 @@ const ChatWindow = () => {
   const [message, setMessage] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showFileMenu, setShowFileMenu] = useState(false);
+  const [showChatMenu, setShowChatMenu] = useState(false);
+  const chatMenuRef = useRef(null);
   const [filePreview, setFilePreview] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [activeCategory, setActiveCategory] = useState("Smileys & People");
@@ -92,6 +101,18 @@ const ChatWindow = () => {
   const textInputRef = useRef(null);
   const loadedContactIdRef = useRef(null);
   const loadedConvIdRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutside = (e) => {
+      if (chatMenuRef.current && !chatMenuRef.current.contains(e.target)) {
+        setShowChatMenu(false);
+      }
+    };
+    if (showChatMenu) {
+      document.addEventListener("mousedown", handleOutside);
+      return () => document.removeEventListener("mousedown", handleOutside);
+    }
+  }, [showChatMenu]);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -265,16 +286,15 @@ const ChatWindow = () => {
 
   return (
     <div className="h-full flex flex-col bg-[#efeae2] dark:bg-[#0b141a] transition-colors relative">
-      <div className="h-16 px-4 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-[#e9edef] dark:border-[#222e35] flex items-center justify-between flex-shrink-0 z-20 select-none">
+      <div className="h-16 px-4 bg-white dark:bg-[#202c33] border-b border-[#e9edef] dark:border-[#222e35] flex items-center justify-between flex-shrink-0 z-20 select-none">
         <div className="flex items-center gap-3">
-          {isMobile && (
-            <button
-              onClick={clearSelectedContact}
-              className="p-2 -ml-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]"
-            >
-              <FaArrowLeft className="w-4 h-4" />
-            </button>
-          )}
+          <button
+            onClick={clearSelectedContact}
+            className="p-2 -ml-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1] transition-colors"
+            title="Back"
+          >
+            <FaArrowLeft className="w-4 h-4" />
+          </button>
 
           <div className="relative">
             <img
@@ -295,38 +315,96 @@ const ChatWindow = () => {
             <h2 className="text-sm font-semibold text-[#111b21] dark:text-[#e9edef] leading-tight">
               {selectedContact?.username}
             </h2>
-            <span className="text-[11px] text-[#54656f] dark:text-[#8696a0] transition-colors">
+            <span className="text-[11px] text-[#667781] dark:text-[#8696a0] transition-colors">
               {isContactTyping ? (
                 <span className="text-[#00a884] font-medium animate-pulse">typing...</span>
               ) : isContactOnline ? (
-                <span className="text-[#00a884] font-medium">online</span>
-              ) : lastSeenDate ? (
-                `last seen ${formatTime(lastSeenDate)}`
+                "Online"
               ) : (
-                "offline"
+                "Offline"
               )}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 text-[#54656f] dark:text-[#aebac1]">
-          <button
-            onClick={() => startCall(selectedContact, "audio")}
-            className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-            title="Voice call"
-          >
-            <MdCall className="w-5 h-5" />
-          </button>
+        <div className="flex items-center gap-2 text-[#54656f] dark:text-[#aebac1]">
           <button
             onClick={() => startCall(selectedContact, "video")}
-            className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-[#25d366]"
             title="Video call"
           >
-            <MdVideocam className="w-5 h-5" />
+            <MdVideocam className="w-6 h-6" />
           </button>
-          <button className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-            <FaEllipsisV className="w-4 h-4" />
-          </button>
+
+          <div className="relative" ref={chatMenuRef}>
+            <button
+              onClick={() => setShowChatMenu((prev) => !prev)}
+              className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              title="Menu"
+            >
+              <FaEllipsisV className="w-4 h-4" />
+            </button>
+
+            {showChatMenu && (
+              <div className="absolute right-0 top-11 w-44 bg-white dark:bg-[#233138] rounded-xl shadow-xl border border-gray-100 dark:border-[#2a3942] py-1.5 z-50 text-xs font-medium overflow-hidden">
+                <button
+                  onClick={() => {
+                    setShowChatMenu(false);
+                    startCall(selectedContact, "audio");
+                  }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-[#f0f2f5] dark:hover:bg-[#182229] text-[#111b21] dark:text-[#e9edef] transition-colors"
+                >
+                  <MdCall className="w-4 h-4 text-[#00a884]" />
+                  Voice call
+                </button>
+                {selectedConversation?._id && (
+                  <>
+                    <button
+                      onClick={async () => {
+                        setShowChatMenu(false);
+                        try {
+                          await clearConversation(selectedConversation._id);
+                          toast.success("Chat cleared");
+                        } catch (e) {
+                          toast.error("Failed to clear chat");
+                        }
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-[#f0f2f5] dark:hover:bg-[#182229] text-[#111b21] dark:text-[#e9edef] transition-colors"
+                    >
+                      <FaEraser className="w-3.5 h-3.5 text-amber-500" />
+                      Clear chat
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setShowChatMenu(false);
+                        try {
+                          await deleteConversation(selectedConversation._id);
+                          clearSelectedContact();
+                          toast.success("Chat deleted");
+                        } catch (e) {
+                          toast.error("Failed to delete chat");
+                        }
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors"
+                    >
+                      <FaTrashAlt className="w-3.5 h-3.5" />
+                      Delete chat
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => {
+                    setShowChatMenu(false);
+                    clearSelectedContact();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-[#f0f2f5] dark:hover:bg-[#182229] text-[#54656f] dark:text-[#8696a0] transition-colors border-t border-gray-100 dark:border-[#2a3942]"
+                >
+                  <FaTimes className="w-3.5 h-3.5" />
+                  Close chat
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -337,12 +415,12 @@ const ChatWindow = () => {
             <span className="text-xs">Loading messages...</span>
           </div>
         ) : messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-[#8696a0] opacity-80 select-none">
-            <div className="p-4 bg-white/80 dark:bg-[#182229]/80 backdrop-blur rounded-xl shadow-sm text-center max-w-sm">
-              <FaLock className="w-4 h-4 mx-auto mb-2 text-[#00a884]" />
-              <p className="text-xs">
-                Messages are end-to-end encrypted. No one outside of this chat can read them.
-              </p>
+          <div className="flex justify-center my-3 select-none">
+            <div className="px-3.5 py-1.5 bg-[#ffeecd]/80 dark:bg-[#182229] border border-[#f3d9a2]/60 dark:border-[#2a3942] rounded-lg shadow-sm text-center max-w-sm">
+              <div className="flex items-center justify-center gap-1.5 text-[11px] text-[#54656f] dark:text-[#8696a0]">
+                <FaLock className="w-3 h-3 text-[#00a884] flex-shrink-0" />
+                <span>Messages are end-to-end encrypted</span>
+              </div>
             </div>
           </div>
         ) : (
@@ -551,7 +629,7 @@ const ChatWindow = () => {
 
       <form
         onSubmit={handleSendMessage}
-        className="min-h-[62px] px-3 py-2 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-[#e9edef] dark:border-[#222e35] flex items-center gap-2 flex-shrink-0 z-20"
+        className="min-h-[62px] px-4 py-2.5 bg-white dark:bg-[#202c33] border-t border-[#e9edef] dark:border-[#222e35] flex items-center gap-3 flex-shrink-0 z-20"
       >
         <button
           type="button"
@@ -559,12 +637,12 @@ const ChatWindow = () => {
             setShowEmojiPicker((prev) => !prev);
             setShowFileMenu(false);
           }}
-          className={`p-2 rounded-full transition-colors ${
-            showEmojiPicker ? "text-[#00a884] bg-black/5 dark:bg-white/5" : "text-[#54656f] dark:text-[#8696a0] hover:text-[#00a884]"
+          className={`text-[#54656f] dark:text-[#8696a0] hover:text-[#00a884] transition-colors p-1 ${
+            showEmojiPicker ? "text-[#00a884]" : ""
           }`}
           title="Emoji"
         >
-          <FaSmile className="w-5 h-5" />
+          <FaRegSmile className="w-5 h-5" />
         </button>
 
         <button
@@ -573,8 +651,8 @@ const ChatWindow = () => {
             setShowFileMenu((prev) => !prev);
             setShowEmojiPicker(false);
           }}
-          className={`p-2 rounded-full transition-colors ${
-            showFileMenu ? "text-[#00a884] bg-black/5 dark:bg-white/5" : "text-[#54656f] dark:text-[#8696a0] hover:text-[#00a884]"
+          className={`text-[#54656f] dark:text-[#8696a0] hover:text-[#00a884] transition-colors p-1 ${
+            showFileMenu ? "text-[#00a884]" : ""
           }`}
           title="Attach"
         >
@@ -589,28 +667,18 @@ const ChatWindow = () => {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="w-full h-10 px-4 bg-white dark:bg-[#2a3942] text-sm text-[#111b21] dark:text-[#e9edef] placeholder-[#8696a0] rounded-lg outline-none transition-colors"
+            className="w-full h-10 px-5 bg-white dark:bg-[#2a3942] border border-[#e9edef] dark:border-[#2a3942] text-sm text-[#111b21] dark:text-[#e9edef] placeholder-[#8696a0] rounded-full outline-none transition-all focus:border-[#00a884]/40"
           />
         </div>
 
-        {message.trim() || selectedFile ? (
-          <button
-            type="submit"
-            disabled={sending}
-            className="p-2.5 rounded-full bg-[#00a884] hover:bg-[#02906f] active:bg-[#075e54] text-white shadow-md transition-all hover:scale-105 disabled:opacity-50"
-            title="Send"
-          >
-            <FaPaperPlane className="w-4 h-4" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="p-2 text-[#54656f] dark:text-[#8696a0] hover:text-[#00a884] transition-colors"
-            title="Voice message"
-          >
-            <FaMicrophone className="w-5 h-5" />
-          </button>
-        )}
+        <button
+          type="submit"
+          disabled={sending || (!message.trim() && !selectedFile)}
+          className="p-1 text-[#00a884] hover:text-[#02906f] active:text-[#075e54] transition-all hover:scale-110 active:scale-95 disabled:opacity-40 flex-shrink-0"
+          title="Send"
+        >
+          <IoSend className="w-5 h-5" />
+        </button>
       </form>
     </div>
   );

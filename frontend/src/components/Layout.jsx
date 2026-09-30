@@ -1,20 +1,24 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  FaCircleNotch,
-  FaSun,
-  FaMoon,
+  FaWhatsapp,
   FaLock,
-  FaTimes,
   FaLaptop,
 } from "react-icons/fa";
-import { MdChat, MdSettings, MdLogout } from "react-icons/md";
+import { MdSettings, MdLogout } from "react-icons/md";
 import useLayoutStore from "../store/useLayoutStore";
 import useUserStore from "../store/useUserStore";
 import useThemeStore from "../store/useThemeStore";
 import { logoutUser } from "../services/userService";
 import { getAvatarUrl } from "../utils/avatarUtil";
 import ChatWindow from "./ChatWindow";
+
+const StatusRingIcon = ({ className = "w-5 h-5" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+    <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="2.2" />
+    <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
+  </svg>
+);
 
 const Layout = ({ children }) => {
   const {
@@ -54,56 +58,42 @@ const Layout = ({ children }) => {
     }
   };
 
-  const navItems = [
-    { id: "chats", label: "Chats", icon: MdChat },
-    { id: "status", label: "Status", icon: FaCircleNotch },
-    { id: "settings", label: "Settings", icon: MdSettings },
-  ];
-
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-[#eae6df] dark:bg-[#0c1317] text-[#111b21] dark:text-[#e9edef] select-none transition-colors">
       {!isMobile && (
         <aside className="w-16 bg-[#f0f2f5] dark:bg-[#202c33] border-r border-[#e9edef] dark:border-[#222e35] flex flex-col justify-between items-center py-4 flex-shrink-0 z-20">
-          <div className="flex flex-col items-center gap-4 w-full">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setActiveTab(item.id);
-                    if (item.id !== "chats") clearSelectedContact();
-                  }}
-                  className={`relative p-3 rounded-xl transition-all ${
-                    isActive
-                      ? "bg-[#00a884]/15 text-[#00a884] dark:bg-[#00a884]/25"
-                      : "text-[#54656f] dark:text-[#aebac1] hover:bg-black/5 dark:hover:bg-white/5"
-                  }`}
-                  title={item.label}
-                >
-                  <Icon className="w-5 h-5" />
-                  {isActive && (
-                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-[#00a884] rounded-r-full" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
+          {/* Top navigation: Chats and Status */}
           <div className="flex flex-col items-center gap-3 w-full">
             <button
-              onClick={toggleTheme}
-              className="p-3 text-[#54656f] dark:text-[#aebac1] hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors"
-              title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
+              onClick={() => setActiveTab("chats")}
+              className={`p-3 rounded-xl transition-all ${
+                activeTab === "chats"
+                  ? "bg-[#00a884]/15 text-[#00a884] dark:bg-[#00a884]/25"
+                  : "text-[#54656f] dark:text-[#aebac1] hover:bg-black/5 dark:hover:bg-white/5"
+              }`}
+              title="Chats"
             >
-              {theme === "dark" ? (
-                <FaSun className="w-4 h-4 text-amber-400" />
-              ) : (
-                <FaMoon className="w-4 h-4 text-indigo-500" />
-              )}
+              <FaWhatsapp className="w-5 h-5" />
             </button>
 
+            <button
+              onClick={() => {
+                setActiveTab("status");
+                clearSelectedContact();
+              }}
+              className={`p-3 rounded-xl transition-all ${
+                activeTab === "status"
+                  ? "bg-[#00a884]/15 text-[#00a884] dark:bg-[#00a884]/25"
+                  : "text-[#54656f] dark:text-[#aebac1] hover:bg-black/5 dark:hover:bg-white/5"
+              }`}
+              title="Status"
+            >
+              <StatusRingIcon className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Bottom navigation: Profile avatar and Settings */}
+          <div className="flex flex-col items-center gap-3 w-full">
             <button
               onClick={() => {
                 setActiveTab("profile");
@@ -112,7 +102,7 @@ const Layout = ({ children }) => {
               className={`relative p-1 rounded-full transition-all ${
                 activeTab === "profile"
                   ? "ring-2 ring-[#00a884]"
-                  : "hover:opacity-80"
+                  : "hover:opacity-85"
               }`}
               title="Profile"
             >
@@ -128,11 +118,18 @@ const Layout = ({ children }) => {
             </button>
 
             <button
-              onClick={handleLogout}
-              className="p-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition-colors"
-              title="Log out"
+              onClick={() => {
+                setActiveTab("settings");
+                clearSelectedContact();
+              }}
+              className={`p-3 rounded-xl transition-all ${
+                activeTab === "settings"
+                  ? "bg-[#00a884]/15 text-[#00a884] dark:bg-[#00a884]/25"
+                  : "text-[#54656f] dark:text-[#aebac1] hover:bg-black/5 dark:hover:bg-white/5"
+              }`}
+              title="Settings"
             >
-              <MdLogout className="w-5 h-5" />
+              <MdSettings className="w-5 h-5" />
             </button>
           </div>
         </aside>
@@ -182,27 +179,47 @@ const Layout = ({ children }) => {
 
       {isMobile && !selectedContact && (
         <nav className="fixed bottom-0 left-0 right-0 h-16 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-[#e9edef] dark:border-[#222e35] flex items-center justify-around z-30 px-2 shadow-lg">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => {
-                  setActiveTab(item.id);
-                  clearSelectedContact();
-                }}
-                className={`flex flex-col items-center gap-1 py-1 px-4 rounded-xl transition-all ${
-                  isActive
-                    ? "text-[#00a884] font-semibold"
-                    : "text-[#54656f] dark:text-[#8696a0]"
-                }`}
-              >
-                <Icon className="w-5 h-5" />
-                <span className="text-[10px] tracking-wide">{item.label}</span>
-              </button>
-            );
-          })}
+          <button
+            onClick={() => setActiveTab("chats")}
+            className={`flex flex-col items-center gap-1 py-1 px-4 rounded-xl transition-all ${
+              activeTab === "chats"
+                ? "text-[#00a884] font-semibold"
+                : "text-[#54656f] dark:text-[#8696a0]"
+            }`}
+          >
+            <FaWhatsapp className="w-5 h-5" />
+            <span className="text-[10px] tracking-wide">Chats</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab("status");
+              clearSelectedContact();
+            }}
+            className={`flex flex-col items-center gap-1 py-1 px-4 rounded-xl transition-all ${
+              activeTab === "status"
+                ? "text-[#00a884] font-semibold"
+                : "text-[#54656f] dark:text-[#8696a0]"
+            }`}
+          >
+            <StatusRingIcon className="w-5 h-5" />
+            <span className="text-[10px] tracking-wide">Status</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab("settings");
+              clearSelectedContact();
+            }}
+            className={`flex flex-col items-center gap-1 py-1 px-4 rounded-xl transition-all ${
+              activeTab === "settings"
+                ? "text-[#00a884] font-semibold"
+                : "text-[#54656f] dark:text-[#8696a0]"
+            }`}
+          >
+            <MdSettings className="w-5 h-5" />
+            <span className="text-[10px] tracking-wide">Settings</span>
+          </button>
 
           <button
             onClick={() => {
