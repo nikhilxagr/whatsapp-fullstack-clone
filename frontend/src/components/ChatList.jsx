@@ -16,8 +16,8 @@ import { toast } from "react-toastify";
 import useUserStore from "../store/useUserStore";
 import useLayoutStore from "../store/useLayoutStore";
 import useChatStore from "../store/useChatStore";
-import { getAllUsers } from "../services/userService";
 import { getAvatarUrl } from "../utils/avatarUtil";
+import NewChat from "./NewChat";
 
 // ── Context menu (WhatsApp-style) ──────────────────────────────────────────
 const ContextMenu = ({ x, y, onBlock, onClearChat, onDeleteChat, onClose }) => {
@@ -145,13 +145,16 @@ const ConfirmDialog = ({ title, description, confirmLabel, confirmClass, onConfi
 const ChatList = () => {
   const { user: currentUser } = useUserStore();
   const { selectedContact, setSelectedContact, setActiveTab } = useLayoutStore();
-  const { conversations, isUserOnline, deleteConversation, clearConversation } = useChatStore();
+  const {
+    conversations,
+    isLoadingConversations,
+    isUserOnline,
+    deleteConversation,
+    clearConversation,
+  } = useChatStore();
 
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState("all");
-  const [showMenu, setShowMenu] = useState(false);
 
   // Context menu
   const [contextMenu, setContextMenu] = useState(null); // { x, y, userItem, conv }
@@ -165,34 +168,21 @@ const ChatList = () => {
   const searchInputRef = useRef(null);
   const activeItemRef = useRef(null); // track which item was right-clicked
 
+  // Auto-select first chat on desktop only if there are active conversations
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        setLoading(true);
-        const res = await getAllUsers();
-        setUsers(res?.data?.users || res?.users || []);
-      } catch (err) {
-        console.error("Failed to fetch users:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchUsers();
-  }, []);
-
-  // Auto-select first chat on desktop if none selected yet
-  useEffect(() => {
-    if (users.length > 0 && !selectedContact && typeof window !== "undefined" && window.innerWidth > 768) {
-      const convList = Array.isArray(conversations) ? conversations : conversations?.data || [];
-      const userWithRecentConv = users.find((u) =>
-        convList.some((c) => c.participants?.some((p) => (p._id || p)?.toString() === u._id?.toString()))
+    const convList = Array.isArray(conversations) ? conversations : conversations?.data || [];
+    if (convList.length > 0 && !selectedContact && typeof window !== "undefined" && window.innerWidth > 768) {
+      const firstConv = convList[0];
+      const other = firstConv?.participants?.find(
+        (p) => (p._id || p)?.toString() !== currentUser?._id?.toString()
       );
-      setSelectedContact(userWithRecentConv || users[0]);
+      if (other) {
+        setSelectedContact(other);
+      }
     }
-  }, [users, conversations, selectedContact, setSelectedContact]);
+  }, [conversations, selectedContact, currentUser?._id, setSelectedContact]);
 
   // ── Attach native contextmenu listener on the list container ──────────────
-  // This guarantees preventDefault fires before the browser shows its menu.
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
@@ -203,18 +193,51 @@ const ChatList = () => {
     };
     el.addEventListener("contextmenu", handleNative);
     return () => el.removeEventListener("contextmenu", handleNative);
-  }, []);
+  }, [isNewChatOpen]);
 
-  const filteredUsers = users.filter((u) => {
-    const conv = conversations.find((c) =>
-      c.participants?.some((p) => (p._id || p)?.toString() === u._id?.toString())
+  // Build the list of active chats strictly from conversations (plus draft contact if selected)
+  const convList = Array.isArray(conversations) ? conversations : conversations?.data || [];
+  const selectedContactIdStr = selectedContact?._id?.toString();
+
+  const activeChats = [];
+  const hasConvWithSelected = convList.some((c) =>
+    c.participants?.some((p) => (p._id || p)?.toString() === selectedContactIdStr)
+  );
+
+  // If user selected a contact from "New Chat" who doesn't have a conversation yet, show as active draft
+  if (selectedContact && !hasConvWithSelected) {
+    activeChats.push({
+      user: selectedContact,
+      conv: null,
+      lastMsg: null,
+      unread: 0,
+      isDraft: true,
+    });
+  }
+
+  convList.forEach((conv) => {
+    const otherUser = conv.participants?.find(
+      (p) => (p._id || p)?.toString() !== currentUser?._id?.toString()
     );
-    const unread = conv?.unreadCount ?? u.unreadCount ?? 0;
+    if (otherUser) {
+      activeChats.push({
+        user: otherUser,
+        conv,
+        lastMsg: conv.lastMessage,
+        unread: conv.unreadCount || 0,
+        isDraft: false,
+      });
+    }
+  });
+
+  const filteredChats = activeChats.filter((item) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
     const nameMatch =
-      u.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.phoneNumber?.includes(searchQuery);
-    if (filterType === "unread") return nameMatch && unread > 0;
-    return nameMatch;
+      item.user?.username?.toLowerCase().includes(q) ||
+      item.user?.phoneNumber?.includes(q);
+    const msgMatch = item.lastMsg?.content?.toLowerCase().includes(q);
+    return nameMatch || msgMatch;
   });
 
   const formatTime = (dateString) => {
@@ -303,6 +326,20 @@ const ChatList = () => {
 
   const currentDialog = pendingAction ? dialogConfig[pendingAction.type] : null;
 
+  // If New Chat drawer is open, show the New Chat screen matching WhatsApp
+  if (isNewChatOpen) {
+    return (
+      <NewChat
+        onClose={() => setIsNewChatOpen(false)}
+        onSelectUser={(contact) => {
+          setSelectedContact(contact);
+          setIsNewChatOpen(false);
+        }}
+        currentUser={currentUser}
+      />
+    );
+  }
+
   return (
     <>
       <div className="flex flex-col h-full bg-white dark:bg-[#111b21] border-r border-[#e9edef] dark:border-[#222e35] select-none transition-colors">
@@ -314,7 +351,7 @@ const ChatList = () => {
           </h1>
 
           <button
-            onClick={() => searchInputRef.current?.focus()}
+            onClick={() => setIsNewChatOpen(true)}
             className="w-8 h-8 rounded-full bg-[#00a884] hover:bg-[#02906f] active:bg-[#075e54] flex items-center justify-center text-white shadow-sm transition-all hover:scale-105 active:scale-95"
             title="New chat"
           >
@@ -343,26 +380,47 @@ const ChatList = () => {
         </div>
 
         {/* ── Chat list ── */}
-        <div ref={listRef} className="flex-1 overflow-y-auto divide-y divide-[#e9edef]/40 dark:divide-[#222e35]/40">
-          {loading ? (
+        <div ref={listRef} className="flex-1 overflow-y-auto divide-y divide-[#e9edef]/40 dark:divide-[#222e35]/40 flex flex-col">
+          {isLoadingConversations ? (
             <div className="flex flex-col items-center justify-center py-16 text-[#8696a0]">
               <div className="w-8 h-8 border-2 border-[#00a884] border-t-transparent rounded-full animate-spin mb-3" />
               <span className="text-xs">Loading chats...</span>
             </div>
-          ) : filteredUsers.length === 0 ? (
-            <div className="text-center py-12 px-6 text-[#8696a0]">
-              <FaUsers className="w-10 h-10 mx-auto mb-2 opacity-40" />
-              <p className="text-xs font-medium">No conversations found</p>
-              <p className="text-[11px] mt-1 opacity-70">Users registered on WhatsApp will show up here.</p>
-            </div>
+          ) : filteredChats.length === 0 ? (
+            searchQuery.trim() ? (
+              <div className="text-center py-12 px-6 text-[#8696a0]">
+                <p className="text-xs font-medium">No chats found</p>
+                <p className="text-[11px] mt-1 opacity-70">
+                  No conversation matches "{searchQuery}"
+                </p>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-[#8696a0]">
+                <div className="w-16 h-16 rounded-full bg-[#f0f2f5] dark:bg-[#202c33] flex items-center justify-center mb-4 shadow-sm">
+                  <MdOutlineChat className="w-8 h-8 text-[#00a884] opacity-80" />
+                </div>
+                <h3 className="text-base font-semibold text-[#111b21] dark:text-[#e9edef] mb-1">
+                  No chats yet
+                </h3>
+                <p className="text-xs text-[#8696a0] max-w-xs mb-5 leading-relaxed">
+                  Start a conversation with anyone registered on WhatsApp by clicking the + button.
+                </p>
+                <button
+                  onClick={() => setIsNewChatOpen(true)}
+                  className="px-5 py-2.5 bg-[#00a884] hover:bg-[#02906f] active:bg-[#075e54] text-white text-xs font-semibold rounded-full shadow-md transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
+                >
+                  <FaPlus className="w-3.5 h-3.5" />
+                  Start new chat
+                </button>
+              </div>
+            )
           ) : (
-            filteredUsers.map((userItem) => {
+            filteredChats.map((item) => {
+              const userItem = item.user;
+              const conv = item.conv;
               const isSelected = selectedContact?._id === userItem._id;
-              const conv = conversations.find((c) =>
-                c.participants?.some((p) => (p._id || p)?.toString() === userItem._id?.toString())
-              );
-              const lastMsg = conv?.lastMessage || userItem.conversation?.lastMessage;
-              const unread = conv?.unreadCount ?? userItem.unreadCount ?? 0;
+              const lastMsg = item.lastMsg;
+              const unread = item.unread;
               const isOnline = isUserOnline(userItem._id) || userItem.isOnline;
 
               return (
@@ -401,11 +459,15 @@ const ChatList = () => {
                     <div className="flex items-center justify-between mb-1">
                       <h2 className="text-sm font-semibold text-[#111b21] dark:text-[#e9edef] truncate">{userItem.username}</h2>
                       <span className="text-[11px] text-[#8696a0] flex-shrink-0 ml-2 font-mono">
-                        {formatTime(lastMsg?.createdAt || userItem.lastSeen)}
+                        {formatTime(lastMsg?.createdAt || conv?.updatedAt)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-xs text-[#54656f] dark:text-[#8696a0]">
-                      <p className="truncate">{lastMsg?.content || userItem.about || "Hey there! I am using WhatsApp."}</p>
+                      <p className="truncate">
+                        {item.isDraft
+                          ? "New conversation"
+                          : lastMsg?.content || userItem.about || "Hey there! I am using WhatsApp."}
+                      </p>
                       {unread > 0 && (
                         <span className="ml-2 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-[#25d366] text-white text-[10px] font-bold rounded-full flex-shrink-0">
                           {unread}
