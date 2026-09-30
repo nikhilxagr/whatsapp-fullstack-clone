@@ -12,11 +12,12 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const uploadOnCloudinary = async (file) => {
+const uploadOnCloudinary = async (file, req = null) => {
   if (!file) return null;
   const isImage = file.mimetype?.startsWith("image");
   const options = {
     resource_type: isImage ? "image" : "video",
+    folder: "whatsapp_clone",
   };
 
   try {
@@ -34,9 +35,16 @@ const uploadOnCloudinary = async (file) => {
     });
     return result;
   } catch (cloudinaryError) {
-    console.warn("⚠️ Cloudinary upload skipped / failed (403):", cloudinaryError.message);
+    console.warn("⚠️ Cloudinary upload skipped / failed:", cloudinaryError.message);
     const filename = path.basename(file.path);
-    const host = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5001}`;
+    let host = "";
+    if (req) {
+      host = `${req.protocol}://${req.get("host")}`;
+    } else if (process.env.NODE_ENV === "production" && process.env.BACKEND_URL) {
+      host = process.env.BACKEND_URL;
+    } else {
+      host = `http://localhost:${process.env.PORT || 5001}`;
+    }
     const localUrl = `${host}/uploads/${filename}`;
     console.log(`ℹ️ [Media Fallback] Serving uploaded file locally: ${localUrl}`);
     return { secure_url: localUrl, url: localUrl };
@@ -58,10 +66,16 @@ const storage = multer.diskStorage({
   },
 });
 
-const uploadFields = multer({ storage }).fields([
-  { name: "media", maxCount: 1 },
+const uploadFields = multer({
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB limit
+}).fields([
   { name: "file", maxCount: 1 },
   { name: "profilePicture", maxCount: 1 },
+  { name: "photo", maxCount: 1 },
+  { name: "avatar", maxCount: 1 },
+  { name: "image", maxCount: 1 },
+  { name: "media", maxCount: 1 },
 ]);
 
 const multerMiddleware = (req, res, next) => {
@@ -71,11 +85,13 @@ const multerMiddleware = (req, res, next) => {
       return next();
     }
     if (req.files) {
-      // Merge all uploaded fields into req.file for convenience
       req.file =
-        req.files.profilePicture?.[0] ||
-        req.files.media?.[0] ||
         req.files.file?.[0] ||
+        req.files.profilePicture?.[0] ||
+        req.files.photo?.[0] ||
+        req.files.avatar?.[0] ||
+        req.files.image?.[0] ||
+        req.files.media?.[0] ||
         req.file;
     }
     next();

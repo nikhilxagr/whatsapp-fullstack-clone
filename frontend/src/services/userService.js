@@ -83,11 +83,10 @@ export const checkUserAuth = async () => {
 export const updateUserProfile = async (data) => {
   try {
     const isFormData = typeof FormData !== "undefined" && data instanceof FormData;
-    const res = await axiosInstance.put("/auth/update-profile", data, {
-      headers: isFormData
-        ? {}
-        : { "Content-Type": "application/json" },
-    });
+    const config = isFormData
+      ? { headers: { "Content-Type": undefined } }
+      : { headers: { "Content-Type": "application/json" } };
+    const res = await axiosInstance.put("/auth/update-profile", data, config);
     return res.data;
   } catch (err) {
     throw err.response?.data || err.message;

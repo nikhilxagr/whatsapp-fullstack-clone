@@ -177,12 +177,15 @@ const updateProfile = async (req, res) => {
     if (req.file) {
       try {
         const { uploadOnCloudinary } = require("../config/cloudinaryConfig");
-        const uploadResult = await uploadOnCloudinary(req.file);
-        if (uploadResult?.secure_url) {
-          updates.profilePicture = uploadResult.secure_url;
+        const uploadResult = await uploadOnCloudinary(req.file, req);
+        if (uploadResult?.secure_url || uploadResult?.url) {
+          updates.profilePicture = uploadResult.secure_url || uploadResult.url;
+        } else {
+          return response(res, 500, "Failed to upload image file to storage");
         }
       } catch (uploadErr) {
         console.error("Profile picture upload failed:", uploadErr.message);
+        return response(res, 500, `Image upload failed: ${uploadErr.message}`);
       }
     } else if (avatarUrl !== undefined) {
       updates.profilePicture = avatarUrl || "";

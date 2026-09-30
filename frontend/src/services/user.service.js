@@ -31,9 +31,10 @@ export const verifyOtp = async (phoneNumber, phoneSuffix, email, otp) => {
 export const updateUserProfile = async (updateData) => {
   try {
     const isFormData = typeof FormData !== 'undefined' && updateData instanceof FormData;
-    const response = await axiosInstance.put('/auth/update-profile', updateData, {
-      headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
-    });
+    const config = isFormData
+      ? { headers: { 'Content-Type': undefined } }
+      : { headers: { 'Content-Type': 'application/json' } };
+    const response = await axiosInstance.put('/auth/update-profile', updateData, config);
     return response.data;
   } catch (error) {
     console.error('Error updating user profile:', error);

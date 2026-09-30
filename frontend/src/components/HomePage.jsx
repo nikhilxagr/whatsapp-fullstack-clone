@@ -5,6 +5,7 @@ import ChatList from "./ChatList";
 import StatusSection from "./status/StatusSection";
 import useLayoutStore from "../store/useLayoutStore";
 import useUserStore from "../store/useUserStore";
+import useChatStore from "../store/useChatStore";
 import useThemeStore from "../store/useThemeStore";
 import { getAvatarUrl } from "../utils/avatarUtil";
 import { updateUserProfile, logoutUser } from "../services/userService";
@@ -33,6 +34,7 @@ const HomePage = () => {
   const navigate = useNavigate();
   const { activeTab, setActiveTab } = useLayoutStore();
   const { user, setUser, clearUser } = useUserStore();
+  const { setCurrentUser } = useChatStore();
   const { theme, toggleTheme } = useThemeStore();
 
   const [loggingOut, setLoggingOut] = useState(false);
@@ -97,6 +99,7 @@ const HomePage = () => {
       const updatedUser = response?.data?.user || response?.user;
       if (updatedUser) {
         setUser(updatedUser);
+        setCurrentUser?.(updatedUser);
         toast.success("Name updated successfully!");
         setIsEditingName(false);
       }
@@ -135,6 +138,7 @@ const HomePage = () => {
       const updatedUser = response?.data?.user || response?.user;
       if (updatedUser) {
         setUser(updatedUser);
+        setCurrentUser?.(updatedUser);
         toast.success("About updated successfully!");
         setIsEditingAbout(false);
       }
@@ -153,6 +157,24 @@ const HomePage = () => {
     // Reset input to allow selecting same file again
     e.target.value = "";
 
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image file (PNG, JPG, WEBP, etc.)");
+      return;
+    }
+
+    // Validate file size (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Image file is too large. Maximum size is 10MB.");
+      return;
+    }
+
+    const previousUser = user;
+    // Instant optimistic preview so user sees new photo immediately
+    const localPreviewUrl = URL.createObjectURL(file);
+    setUser({ ...user, profilePicture: localPreviewUrl });
+    setCurrentUser?.({ ...user, profilePicture: localPreviewUrl });
+
     try {
       setUploading(true);
       const formData = new FormData();
@@ -160,12 +182,18 @@ const HomePage = () => {
 
       const response = await updateUserProfile(formData);
       const updatedUser = response?.data?.user || response?.user;
-      if (updatedUser) {
+      if (updatedUser && updatedUser.profilePicture) {
         setUser(updatedUser);
+        setCurrentUser?.(updatedUser);
         toast.success("Profile photo updated successfully!");
+      } else {
+        throw new Error(response?.message || "Failed to update profile photo");
       }
     } catch (err) {
       console.error("Photo upload failed:", err);
+      // Revert to previous photo on failure
+      setUser(previousUser);
+      setCurrentUser?.(previousUser);
       toast.error(err?.message || "Failed to upload profile photo");
     } finally {
       setUploading(false);
@@ -173,16 +201,23 @@ const HomePage = () => {
   };
 
   const handleRemovePhoto = async () => {
+    const previousUser = user;
+    setUser({ ...user, profilePicture: "" });
+    setCurrentUser?.({ ...user, profilePicture: "" });
+
     try {
       setRemovingPhoto(true);
       const response = await updateUserProfile({ profilePicture: "" });
       const updatedUser = response?.data?.user || response?.user;
       if (updatedUser) {
         setUser(updatedUser);
+        setCurrentUser?.(updatedUser);
         toast.success("Profile photo removed");
       }
     } catch (err) {
       console.error("Failed to remove photo:", err);
+      setUser(previousUser);
+      setCurrentUser?.(previousUser);
       toast.error(err?.message || "Failed to remove photo");
     } finally {
       setRemovingPhoto(false);
