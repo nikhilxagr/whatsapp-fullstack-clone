@@ -17,6 +17,8 @@ import {
   FaPhone,
   FaEye,
   FaEyeSlash,
+  FaAndroid,
+  FaDownload,
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 
@@ -704,6 +706,23 @@ const Login = () => {
                 "Send Verification Code"
               )}
             </button>
+
+            <div className="pt-1">
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-gray-200 dark:border-[#2a3942]"></div>
+                <span className="flex-shrink mx-3 text-[10px] text-[#8696a0] font-medium uppercase tracking-wider">or install mobile app</span>
+                <div className="flex-grow border-t border-gray-200 dark:border-[#2a3942]"></div>
+              </div>
+              <a
+                href="/WhatsApp.apk"
+                download="WhatsApp.apk"
+                className="w-full h-11 rounded-xl bg-[#00a884]/10 hover:bg-[#00a884]/20 border border-[#00a884]/30 text-[#075e54] dark:text-[#25d366] text-xs font-semibold tracking-wide transition-all flex items-center justify-center gap-2 group shadow-sm"
+              >
+                <FaAndroid className="w-4 h-4 text-[#00a884] group-hover:scale-110 transition-transform" />
+                <span>Download Android App (.APK)</span>
+                <FaDownload className="w-3 h-3 opacity-70 group-hover:translate-y-0.5 transition-transform" />
+              </a>
+            </div>
           </form>
         )}
 
@@ -862,7 +881,22 @@ const Login = () => {
           </form>
         )}
 
-        <div className="mt-6 pt-4 border-t border-gray-100 dark:border-[#222e35] flex items-center justify-center gap-2 text-[#8696a0] text-[11px]">
+        <div className="mt-5 pt-3.5 border-t border-gray-100 dark:border-[#222e35] flex items-center justify-between text-xs">
+          <span className="text-[#54656f] dark:text-[#8696a0] text-[11px]">
+            Prefer Android app?
+          </span>
+          <a
+            href="/WhatsApp.apk"
+            download="WhatsApp.apk"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00a884]/10 hover:bg-[#00a884]/20 text-[#00a884] dark:text-[#25d366] font-semibold text-[11px] transition-colors"
+          >
+            <FaAndroid className="w-3.5 h-3.5" />
+            <span>Download APK</span>
+            <FaDownload className="w-2.5 h-2.5 opacity-70" />
+          </a>
+        </div>
+
+        <div className="mt-3 flex items-center justify-center gap-2 text-[#8696a0] text-[11px]">
           <FaShieldAlt className="w-3 h-3 text-[#075e54] dark:text-[#008069]" />
           <span>End-to-end encrypted login authentication</span>
         </div>
