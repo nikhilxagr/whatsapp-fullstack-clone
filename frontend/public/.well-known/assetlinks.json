@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.vercel.whatsapp_webclone.twa",
+      "sha256_cert_fingerprints": [
+        "AA:09:04:87:D4:CF:62:DF:EB:61:0F:C4:1F:AF:F3:26:48:6C:90:57:82:58:46:11:86:A3:87:B4:DF:8F:5C:B6"
+      ]
+    }
+  }
+]
