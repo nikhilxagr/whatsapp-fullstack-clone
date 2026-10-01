@@ -42,11 +42,22 @@
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "WhatsApp Web for Desktop"
     },
     {
-      "src": "/favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
+      "src": "/screenshot-mobile.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "WhatsApp Web for Mobile"
     }
   ],
   "shortcuts": [
@@ -65,5 +76,6 @@
       "icons": [{ "src": "/logo192.png", "sizes": "192x192" }]
     }
   ],
+  "related_applications": [],
   "prefer_related_applications": false
 }
