@@ -66,12 +66,47 @@ exports.sendMessage = async (req, res) => {
       .populate("sender", "username profilePicture")
       .populate("receiver", "username profilePicture");
 
-    if (req.io && req.socketUserMap) {
-      const receiverSocketId = req.socketUserMap.get(receiverId?.toString());
-      if (receiverSocketId) {
-        req.io.to(receiverSocketId).emit("receiveMessage", populatedMessage);
+    if (req.io) {
+      const receiverIdStr = receiverId?.toString();
+      const senderIdStr = effectiveSenderId?.toString();
+
+      // 1. Emit to receiver's user room (reaches all active sockets in room)
+      if (receiverIdStr) {
+        req.io.to(receiverIdStr).emit("receiveMessage", populatedMessage);
+        req.io.to(receiverIdStr).emit("receive_message", populatedMessage);
+      }
+
+      // 2. Also emit to sender's other sockets/tabs
+      if (senderIdStr) {
+        req.io.to(senderIdStr).emit("message_send", populatedMessage);
+      }
+
+      // 3. Emit directly to individual socket IDs if tracked in socketUserMap
+      if (req.socketUserMap && receiverIdStr) {
+        const sids = typeof req.socketUserMap.getAll === "function"
+          ? req.socketUserMap.getAll(receiverIdStr)
+          : req.socketUserMap.get?.(receiverIdStr);
+        if (Array.isArray(sids)) {
+          sids.forEach((sid) => {
+            req.io.to(sid).emit("receiveMessage", populatedMessage);
+            req.io.to(sid).emit("receive_message", populatedMessage);
+          });
+        } else if (typeof sids === "string") {
+          req.io.to(sids).emit("receiveMessage", populatedMessage);
+          req.io.to(sids).emit("receive_message", populatedMessage);
+        }
+      }
+
+      // Check if receiver is online to update status to delivered
+      const isOnline = Boolean(
+        req.socketUserMap?.has?.(receiverIdStr) ||
+        (req.io.sockets?.adapter?.rooms?.get(receiverIdStr)?.size > 0)
+      );
+
+      if (isOnline) {
         message.messageStatus = "delivered";
         await message.save();
+        populatedMessage.messageStatus = "delivered";
       }
     }
 
@@ -163,18 +198,36 @@ exports.markMessagesAsRead = async (req, res) => {
       await Conversation.findByIdAndUpdate(conversationId, { unreadCount: 0 });
     }
 
-    if (req.io && req.socketUserMap) {
+    if (req.io) {
       messagesToUpdate.forEach((msg) => {
-        const senderSocketId = req.socketUserMap.get(msg.sender.toString());
-        if (senderSocketId) {
+        const senderIdStr = (msg.sender?._id || msg.sender)?.toString();
+        if (senderIdStr) {
           const payload = {
             messageId: msg._id,
             _id: msg._id,
             conversationId: msg.conversation,
             messageStatus: "read",
           };
-          req.io.to(senderSocketId).emit("message_status_update", payload);
-          req.io.to(senderSocketId).emit("messageRead", payload);
+
+          // Emit to sender's room
+          req.io.to(senderIdStr).emit("message_status_update", payload);
+          req.io.to(senderIdStr).emit("messageRead", payload);
+
+          // Also emit to specific socket IDs
+          if (req.socketUserMap) {
+            const sids = typeof req.socketUserMap.getAll === "function"
+              ? req.socketUserMap.getAll(senderIdStr)
+              : req.socketUserMap.get?.(senderIdStr);
+            if (Array.isArray(sids)) {
+              sids.forEach((sid) => {
+                req.io.to(sid).emit("message_status_update", payload);
+                req.io.to(sid).emit("messageRead", payload);
+              });
+            } else if (typeof sids === "string") {
+              req.io.to(sids).emit("message_status_update", payload);
+              req.io.to(sids).emit("messageRead", payload);
+            }
+          }
         }
       });
     }
@@ -204,17 +257,34 @@ exports.markAsRead = async (req, res) => {
     message.messageStatus = "read";
     await message.save();
 
-    if (req.io && req.socketUserMap) {
-      const senderSocketId = req.socketUserMap.get(message.sender.toString());
-      if (senderSocketId) {
+    if (req.io) {
+      const senderIdStr = message.sender?.toString();
+      if (senderIdStr) {
         const payload = {
           messageId: message._id,
           _id: message._id,
           conversationId: message.conversation,
           messageStatus: "read",
         };
-        req.io.to(senderSocketId).emit("message_status_update", payload);
-        req.io.to(senderSocketId).emit("messageRead", payload);
+
+        // Emit to sender's room
+        req.io.to(senderIdStr).emit("message_status_update", payload);
+        req.io.to(senderIdStr).emit("messageRead", payload);
+
+        if (req.socketUserMap) {
+          const sids = typeof req.socketUserMap.getAll === "function"
+            ? req.socketUserMap.getAll(senderIdStr)
+            : req.socketUserMap.get?.(senderIdStr);
+          if (Array.isArray(sids)) {
+            sids.forEach((sid) => {
+              req.io.to(sid).emit("message_status_update", payload);
+              req.io.to(sid).emit("messageRead", payload);
+            });
+          } else if (typeof sids === "string") {
+            req.io.to(sids).emit("message_status_update", payload);
+            req.io.to(sids).emit("messageRead", payload);
+          }
+        }
       }
     }
 
@@ -239,11 +309,27 @@ exports.deleteMessage = async (req, res) => {
 
     await message.deleteOne();
 
-    if (req.io && req.socketUserMap) {
-      const receiverSocketId = req.socketUserMap.get(message.receiver.toString());
-      if (receiverSocketId) {
-        req.io.to(receiverSocketId).emit("message_deleted", { deletedMessageId: messageId });
-        req.io.to(receiverSocketId).emit("messageDeleted", { deletedMessageId: messageId });
+    if (req.io) {
+      const receiverIdStr = message.receiver?.toString();
+      if (receiverIdStr) {
+        const payload = { deletedMessageId: messageId, messageId };
+        req.io.to(receiverIdStr).emit("message_deleted", payload);
+        req.io.to(receiverIdStr).emit("messageDeleted", payload);
+
+        if (req.socketUserMap) {
+          const sids = typeof req.socketUserMap.getAll === "function"
+            ? req.socketUserMap.getAll(receiverIdStr)
+            : req.socketUserMap.get?.(receiverIdStr);
+          if (Array.isArray(sids)) {
+            sids.forEach((sid) => {
+              req.io.to(sid).emit("message_deleted", payload);
+              req.io.to(sid).emit("messageDeleted", payload);
+            });
+          } else if (typeof sids === "string") {
+            req.io.to(sids).emit("message_deleted", payload);
+            req.io.to(sids).emit("messageDeleted", payload);
+          }
+        }
       }
     }
 
@@ -310,11 +396,11 @@ exports.deleteConversation = async (req, res) => {
     await Message.deleteMany({ conversation: conversationId });
     await conversation.deleteOne();
     
-    if (req.io && req.socketUserMap) {
+    if (req.io) {
       const otherParticipant = conversation.participants.find(p => p.toString() !== userId.toString());
-      const receiverSocketId = req.socketUserMap.get(otherParticipant?.toString());
-      if (receiverSocketId) {
-        req.io.to(receiverSocketId).emit("conversationDeleted", { conversationId });
+      const otherParticipantStr = otherParticipant?.toString();
+      if (otherParticipantStr) {
+        req.io.to(otherParticipantStr).emit("conversationDeleted", { conversationId });
       }
     }
 
@@ -338,19 +424,17 @@ exports.clearConversation = async (req, res) => {
       return response(res, 403, "You are not a participant in this conversation");
     }
 
-    // Delete all messages but keep the conversation
     await Message.deleteMany({ conversation: conversationId });
 
-    // Reset the lastMessage and unreadCount
     conversation.lastMessage = null;
     conversation.unreadCount = 0;
     await conversation.save();
 
-    if (req.io && req.socketUserMap) {
+    if (req.io) {
       const otherParticipant = conversation.participants.find(p => p.toString() !== userId.toString());
-      const receiverSocketId = req.socketUserMap.get(otherParticipant?.toString());
-      if (receiverSocketId) {
-        req.io.to(receiverSocketId).emit("conversationCleared", { conversationId });
+      const otherParticipantStr = otherParticipant?.toString();
+      if (otherParticipantStr) {
+        req.io.to(otherParticipantStr).emit("conversationCleared", { conversationId });
       }
     }
 

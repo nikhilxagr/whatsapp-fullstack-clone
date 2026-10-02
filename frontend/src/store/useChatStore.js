@@ -2,6 +2,8 @@ import { create } from "zustand";
 import * as chatApi from "../services/chat.api";
 import { getSocket } from "../services/chat.service";
 import axiosInstance from "../services/url.service";
+import useUserStore from "./useUserStore";
+import useLayoutStore from "./useLayoutStore";
 
 const useChatStore = create((set, get) => ({
   conversations: [],
@@ -16,6 +18,11 @@ const useChatStore = create((set, get) => ({
 
   setCurrentUser: (user) => {
     set({ currentUser: user });
+    const uid = (user?._id || user?.id || user?.userId)?.toString();
+    const socket = getSocket();
+    if (socket?.connected && uid) {
+      socket.emit("userConnected", uid);
+    }
   },
 
   initSocketListeners: () => {
@@ -244,47 +251,97 @@ const useChatStore = create((set, get) => ({
   receiveMessage: (message) => {
     if (!message?._id) return;
 
+    const myUser = get().currentUser || useUserStore.getState().user;
+    const myId = (myUser?._id || myUser?.id || myUser?.userId)?.toString();
+
+    const senderId = (message.sender?._id || message.sender?.id || message.sender)?.toString();
+    const receiverId = (message.receiver?._id || message.receiver?.id || message.receiver)?.toString();
+    const messageConvId = (message.conversation?._id || message.conversation)?.toString();
+
+    const activeConvId = (get().currentConversation?._id || get().currentConversation)?.toString();
+    const selectedContact = useLayoutStore.getState().selectedContact;
+    const selectedContactId = (selectedContact?._id || selectedContact?.id)?.toString();
+
+    // Check if the user is currently viewing this chat (either matching conversation ID or matching selected contact)
+    const isWithActiveContact = Boolean(
+      selectedContactId && (senderId === selectedContactId || receiverId === selectedContactId)
+    );
+    const isViewingChat = Boolean(
+      (activeConvId && messageConvId && activeConvId === messageConvId) || isWithActiveContact
+    );
+
+    const isForMe = Boolean(myId && receiverId === myId);
+
     set((state) => {
       const isDuplicate = state.messages.some((m) => m._id === message._id);
-      if (isDuplicate) return state;
 
-      const messageConvId = (message.conversation?._id || message.conversation)?.toString();
-      const activeConvId = (state.currentConversation?._id || state.currentConversation)?.toString();
-      const isViewingChat = activeConvId && messageConvId === activeConvId;
+      let nextMessages = state.messages;
+      if (isViewingChat) {
+        if (isDuplicate) {
+          nextMessages = state.messages.map((m) =>
+            m._id === message._id ? { ...m, ...message } : m
+          );
+        } else {
+          nextMessages = [...state.messages, message];
+        }
+      }
 
-      const myId = state.currentUser?._id?.toString();
-      const isForMe = (message.receiver?._id || message.receiver)?.toString() === myId;
+      // If viewing chat and currentConversation wasn't set yet, attach it
+      const nextCurrentConv =
+        !state.currentConversation && messageConvId && isViewingChat
+          ? messageConvId
+          : state.currentConversation;
 
-      const nextMessages = isViewingChat ? [...state.messages, message] : state.messages;
+      const rawConversations = Array.isArray(state.conversations)
+        ? state.conversations
+        : state.conversations?.data || [];
 
       let conversationFound = false;
-      const nextConversations = state.conversations.map((conv) => {
-        if (conv._id?.toString() === messageConvId) {
+      const updatedConversations = rawConversations.map((conv) => {
+        const convId = conv._id?.toString();
+        const matchesConvId = convId && messageConvId && convId === messageConvId;
+        const matchesParticipants =
+          conv.participants?.some((p) => (p._id || p)?.toString() === senderId) &&
+          conv.participants?.some((p) => (p._id || p)?.toString() === receiverId);
+
+        if (matchesConvId || matchesParticipants) {
           conversationFound = true;
           const increment = !isViewingChat && isForMe ? 1 : 0;
           return {
             ...conv,
             lastMessage: message,
             unreadCount: isViewingChat ? 0 : (conv.unreadCount || 0) + increment,
+            updatedAt: message.createdAt || new Date().toISOString(),
           };
         }
         return conv;
       });
 
-      if (!conversationFound) {
-        setTimeout(() => get().fetchConversations(), 500);
+      // Move latest conversation to top of the list (matching WhatsApp behavior)
+      if (conversationFound) {
+        updatedConversations.sort((a, b) => {
+          const timeA = new Date(a.lastMessage?.createdAt || a.updatedAt || 0).getTime();
+          const timeB = new Date(b.lastMessage?.createdAt || b.updatedAt || 0).getTime();
+          return timeB - timeA;
+        });
+      } else {
+        setTimeout(() => get().fetchConversations(), 300);
       }
 
       return {
         messages: nextMessages,
-        conversations: nextConversations,
+        currentConversation: nextCurrentConv,
+        conversations: Array.isArray(state.conversations)
+          ? updatedConversations
+          : { ...state.conversations, data: updatedConversations },
       };
     });
 
-    const activeConvId = (get().currentConversation?._id || get().currentConversation)?.toString();
-    const messageConvId = (message.conversation?._id || message.conversation)?.toString();
-    if (activeConvId && messageConvId === activeConvId) {
-      get().markMessagesAsRead(activeConvId);
+    if (isViewingChat && isForMe) {
+      const convIdToRead = messageConvId || activeConvId;
+      if (convIdToRead) {
+        get().markMessagesAsRead(convIdToRead);
+      }
     }
   },
 
